@@ -1,0 +1,92 @@
+import { useCallback, useState } from "react";
+import { Header } from "./components/Header";
+import { KpiCards } from "./components/KpiCards";
+import { KitchenPanel } from "./components/KitchenPanel";
+import { RiderPanel } from "./components/RiderPanel";
+import { DecisionTable } from "./components/DecisionTable";
+import { EventLog } from "./components/EventLog";
+import { Controls } from "./components/Controls";
+import { ComparePanel } from "./components/ComparePanel";
+import { useSimStream } from "./useSimStream";
+import { useCompare } from "./useCompare";
+import { api } from "./api";
+import type { RunnerConfig } from "./types";
+
+const DEFAULT_CFG: RunnerConfig = {
+  scenario: "normal",
+  seed: 42,
+  policy: "adaptive",
+  days: 1,
+  speed: 60,
+  step_minutes: 1,
+};
+
+type Action = "start" | "pause" | "resume" | "step" | "reset";
+
+export default function App() {
+  const [cfg, setCfg] = useState<RunnerConfig>(DEFAULT_CFG);
+  const { snapshot, conn } = useSimStream(cfg);
+  const compare = useCompare(cfg);
+  const [error, setError] = useState<string | null>(null);
+
+  const onAction = useCallback(
+    async (kind: Action) => {
+      setError(null);
+      try {
+        if (kind === "start") {
+          await api.reset(cfg);
+          await api.start();
+        } else if (kind === "pause") await api.pause();
+        else if (kind === "resume") await api.resume();
+        else if (kind === "step") await api.step(5);
+        else await api.reset(cfg);
+      } catch (err) {
+        setError(String((err as Error).message ?? err));
+      }
+    },
+    [cfg],
+  );
+
+  const busy = compare.state.running;
+
+  return (
+    <div className="app">
+      <Header snap={snapshot} conn={conn} />
+      {error && <div className="error-banner">{error}</div>}
+
+      <section className="section">
+        <Controls cfg={cfg} setCfg={setCfg} snap={snapshot} busy={busy} onAction={onAction} />
+      </section>
+
+      <section className="section">
+        <div className="cols state">
+          <KitchenPanel kitchens={snapshot?.kitchens ?? []} />
+          <RiderPanel riders={snapshot?.riders ?? []} />
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="cols decisions">
+          <DecisionTable decisions={snapshot?.recent_decisions ?? []} />
+          <EventLog events={snapshot?.events ?? []} />
+        </div>
+      </section>
+
+      <section className="section">
+        <KpiCards m={snapshot?.metrics ?? null} />
+        <div className="panel">
+          <div className="panel-head">
+            <h3>Policy comparison</h3>
+            <div className="head-actions">
+              {busy && <button className="btn" onClick={compare.cancel}>Cancel</button>}
+              <button className="btn primary" disabled={busy} onClick={compare.run}>
+                {busy ? "Running…" : "Run compare"}
+              </button>
+            </div>
+          </div>
+          <ComparePanel state={compare.state} />
+        </div>
+      </section>
+    </div>
+  );
+}

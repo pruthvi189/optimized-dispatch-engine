@@ -1,0 +1,11 @@
+seed: 42
+days: 1
+demand_multiplier: 1.0
+weather:
+  start_severity: rain
+  transitions:
+    clear: {clear: 0.5, rain: 0.4, storm: 0.1}
+    rain: {rain: 0.8, clear: 0.1, storm: 0.1}
+    storm: {storm: 0.7, rain: 0.2, clear: 0.1}
+traffic:
+  spike_prob_per_min: 0.002

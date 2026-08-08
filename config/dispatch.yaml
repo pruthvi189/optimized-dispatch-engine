@@ -1,0 +1,48 @@
+# Dispatch engine configuration (Phase 3). Merged into DEFAULT_CONFIG.
+enabled: true
+default_policy: immediate
+predictor_dir: artifacts
+
+# Which prep prediction drives dispatch timing. "low" = calibrated lower
+# quantile (dispatch so the rider reaches the kitchen at the earliest
+# high-confidence ready time, so food never waits on the rider); "mean" =
+# the point forecast. The mean is always used for the reported ETA.
+dispatch_quantile: low
+
+# Dynamic risk buffer (minutes) by prediction uncertainty tier.
+# PRD: Low 30s / Med 1min / High 2-3min.
+risk_buffer_min:
+  low: 0.5
+  medium: 1.0
+  high: 2.5
+
+# Extra buffer (minutes) per order currently queued in the order's kitchen.
+congestion_buffer_per_order: 0.3
+
+# Cost score weights: 1x rider idle + 5x order wait + 10x late.
+cost_weights:
+  idle: 1
+  wait: 5
+  late: 10
+
+# Customer promise: order delivered within this many minutes of placement.
+promised_delivery_min: 10.0
+
+# Rider hub-to-kitchen distance sampled per order (km).
+hub_distance_range_km: [0.5, 2.0]
+
+# Fixed time for pickup handoff at the kitchen (minutes).
+pickup_time_min: 0.5
+
+# Rider unavailable penalty after a rider cancel (minutes), then back to idle.
+penalty_min: 10.0
+
+# Travel speed degradation by severity (multipliers applied to travel time).
+weather_speed_factor:
+  clear: 1.0
+  rain: 1.15
+  storm: 1.3
+traffic_speed_factor:
+  low: 1.0
+  moderate: 1.2
+  heavy: 1.35

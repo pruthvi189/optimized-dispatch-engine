@@ -1,0 +1,95 @@
+import type { RunnerConfig, Snapshot } from "../types";
+import { POLICIES, SCENARIOS } from "../types";
+
+type Action = "start" | "pause" | "resume" | "step" | "reset";
+
+interface Props {
+  cfg: RunnerConfig;
+  setCfg: (c: RunnerConfig) => void;
+  snap: Snapshot | null;
+  busy: boolean;
+  onAction: (kind: Action) => void;
+}
+
+export function Controls({ cfg, setCfg, snap, busy, onAction }: Props) {
+  const running = snap?.running ?? false;
+  const paused = snap?.paused ?? false;
+  const finished = snap?.finished ?? false;
+
+  const set = <K extends keyof RunnerConfig>(k: K, v: RunnerConfig[K]) =>
+    setCfg({ ...cfg, [k]: v });
+
+  return (
+    <div className="panel controls">
+      <div className="group">
+        <div className="field">
+          <label>scenario</label>
+          <select value={cfg.scenario} disabled={busy} onChange={(e) => set("scenario", e.target.value)}>
+            {SCENARIOS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>policy</label>
+          <select value={cfg.policy} disabled={busy} onChange={(e) => set("policy", e.target.value)}>
+            {POLICIES.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>seed</label>
+          <input
+            type="number"
+            value={cfg.seed}
+            disabled={busy}
+            onChange={(e) => set("seed", Number(e.target.value) || 0)}
+          />
+        </div>
+        <div className="field">
+          <label>days</label>
+          <input
+            type="number"
+            min={1}
+            max={30}
+            value={cfg.days}
+            disabled={busy}
+            onChange={(e) =>
+              set("days", Math.min(30, Math.max(1, Number(e.target.value) || 1)))
+            }
+          />
+        </div>
+        <div className="field">
+          <label>speed (sim-min/s)</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="range"
+              min={10}
+              max={1000}
+              step={10}
+              value={cfg.speed ?? 60}
+              disabled={busy}
+              onChange={(e) => set("speed", Number(e.target.value))}
+            />
+            <span className="speed-val">{cfg.speed ?? "max"}</span>
+          </div>
+        </div>
+      </div>
+      <div className="divider" />
+      <div className="actions">
+        <button className="btn primary" disabled={busy || running} onClick={() => onAction("start")}>
+          Start
+        </button>
+        <button className="btn" disabled={busy || !running || paused || finished} onClick={() => onAction("pause")}>
+          Pause
+        </button>
+        <button className="btn" disabled={busy || !paused} onClick={() => onAction("resume")}>
+          Resume
+        </button>
+        <button className="btn" disabled={busy || (running && !paused) || finished} onClick={() => onAction("step")}>
+          Step +5
+        </button>
+        <button className="btn danger" disabled={busy} onClick={() => onAction("reset")}>
+          Reset
+        </button>
+      </div>
+    </div>
+  );
+}
