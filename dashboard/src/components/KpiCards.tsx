@@ -10,7 +10,9 @@ function Card({ label, value, tone }: { label: string; value: string; tone?: str
 }
 
 export function KpiCards({ m }: { m: Metrics | null }) {
-  if (!m) {
+  // Backend sends `metrics: {}` on the first frame before the runner emits;
+  // treat an empty object the same as null and show the skeleton.
+  if (!m || Object.keys(m).length === 0) {
     return (
       <div className="kpis">
         {["placed", "completed", "cancelled", "on-time", "avg delivery", "order wait", "rider kitchen wait", "cost score"].map((l) => (

@@ -37,13 +37,16 @@ export function useCompare(cfg: RunnerConfig) {
     setState({ immediate: null, adaptive: null, running: true, error: null });
     try {
       const results: Metrics[] = [];
+      // Longer runs need a bigger poll budget: 100ms per tick, scaled by days.
+      const days = cfgRef.current.days;
+      const maxIters = Math.max(600, days * 300);
       for (const policy of ["immediate", "adaptive"] as const) {
         if (!runningRef.current) return;
-        const base = { ...cfgRef.current, policy, speed: null as number | null };
+        const base = { ...cfgRef.current, policy, speed: null };
         await api.reset(base);
         if (!runningRef.current) return;
         await api.start();
-        for (let i = 0; i < 600; i++) {
+        for (let i = 0; i < maxIters; i++) {
           await sleep(100);
           if (!runningRef.current) return;
           const s = await api.status();
@@ -53,7 +56,14 @@ export function useCompare(cfg: RunnerConfig) {
           }
         }
       }
-      if (results.length !== 2) throw new Error("compare timed out before both runs finished");
+      if (results.length !== 2) {
+        throw new Error(
+          `compare timed out after ${(maxIters * 0.1).toFixed(0)}s (${days} day run) — ` +
+            "neither policy finished. Increase the poll budget or check the backend runner.",
+        );
+      }
+      // Restore the runner to the user's config so the live UI stream re-syncs.
+      await api.reset(cfgRef.current).catch(() => {});
       setState({ immediate: results[0], adaptive: results[1], running: false, error: null });
     } catch (err) {
       setState((s) => ({ ...s, running: false, error: String((err as Error).message ?? err) }));

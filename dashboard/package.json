@@ -9,8 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-query-devtools": "^5.101.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-window": "^2.3.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

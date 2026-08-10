@@ -15,8 +15,8 @@
   --border-2: #2a2b2f;
   --text: #e5e6e8;
   --text-2: #a6a8ad;
-  --text-3: #6e7076;
-  --text-4: #47494d;
+  --text-3: #8a8d94; /* was #6e7076 — raised for AA contrast on panels */
+  --text-4: #8a8d94; /* was #47494d — raised so compare-bar segments are visible */
 
   /* semantic — meaning only */
   --good: #4cc38a;
@@ -24,8 +24,8 @@
   --bad: #e05c56;
 
   /* interactive only */
-  --blue: #5b8def;
-  --blue-strong: #4c7fe0;
+  --blue: #4a72d6; /* darker than #5b8def so white button text passes AA */
+  --blue-strong: #3f63b8;
 
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Consolas, "Roboto Mono", Menlo, monospace;

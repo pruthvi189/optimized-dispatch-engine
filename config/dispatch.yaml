@@ -26,7 +26,7 @@ cost_weights:
   late: 10
 
 # Customer promise: order delivered within this many minutes of placement.
-promised_delivery_min: 10.0
+promised_delivery_min: 15.0
 
 # Rider hub-to-kitchen distance sampled per order (km).
 hub_distance_range_km: [0.5, 2.0]

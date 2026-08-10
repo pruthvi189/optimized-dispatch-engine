@@ -1,5 +1,6 @@
 data/
 artifacts/
+artifacts_test/
 __pycache__/
 *.pyc
 .venv/

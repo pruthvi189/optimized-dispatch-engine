@@ -4,6 +4,7 @@ const RIDER_TONE: Record<string, string> = {
   idle: "idle",
   delivering: "good",
   assigned: "warn",
+  unavailable: "warn",
 };
 
 export function RiderPanel({ riders }: { riders: RiderState[] }) {

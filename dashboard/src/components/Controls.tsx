@@ -23,20 +23,21 @@ export function Controls({ cfg, setCfg, snap, busy, onAction }: Props) {
     <div className="panel controls">
       <div className="group">
         <div className="field">
-          <label>scenario</label>
-          <select value={cfg.scenario} disabled={busy} onChange={(e) => set("scenario", e.target.value)}>
+          <label htmlFor="cfg-scenario">scenario</label>
+          <select id="cfg-scenario" value={cfg.scenario} disabled={busy} onChange={(e) => set("scenario", e.target.value)}>
             {SCENARIOS.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div className="field">
-          <label>policy</label>
-          <select value={cfg.policy} disabled={busy} onChange={(e) => set("policy", e.target.value)}>
+          <label htmlFor="cfg-policy">policy</label>
+          <select id="cfg-policy" value={cfg.policy} disabled={busy} onChange={(e) => set("policy", e.target.value)}>
             {POLICIES.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
         <div className="field">
-          <label>seed</label>
+          <label htmlFor="cfg-seed">seed</label>
           <input
+            id="cfg-seed"
             type="number"
             value={cfg.seed}
             disabled={busy}
@@ -44,8 +45,9 @@ export function Controls({ cfg, setCfg, snap, busy, onAction }: Props) {
           />
         </div>
         <div className="field">
-          <label>days</label>
+          <label htmlFor="cfg-days">days</label>
           <input
+            id="cfg-days"
             type="number"
             min={1}
             max={30}
@@ -57,9 +59,10 @@ export function Controls({ cfg, setCfg, snap, busy, onAction }: Props) {
           />
         </div>
         <div className="field">
-          <label>speed (sim-min/s)</label>
+          <label htmlFor="cfg-speed">speed (sim-min/s)</label>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
+              id="cfg-speed"
               type="range"
               min={10}
               max={1000}

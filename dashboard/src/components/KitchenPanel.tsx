@@ -2,7 +2,6 @@ import type { KitchenState } from "../types";
 
 export function KitchenPanel({ kitchens }: { kitchens: KitchenState[] }) {
   const queued = kitchens.reduce((s, k) => s + k.queue_len, 0);
-  const inFlight = kitchens.reduce((s, k) => s + k.orders.length, 0);
 
   return (
     <div className="panel">
@@ -10,7 +9,7 @@ export function KitchenPanel({ kitchens }: { kitchens: KitchenState[] }) {
         <h3>Kitchens</h3>
         <span className="panel-meta">
           {kitchens.length
-            ? `${kitchens.length} active · ${queued} queued · ${inFlight} in flight`
+            ? `${kitchens.length} active · ${queued} queued`
             : "—"}
         </span>
       </div>

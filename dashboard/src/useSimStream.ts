@@ -42,7 +42,11 @@ export function useSimStream(cfg: { scenario: string; seed: number; policy: stri
         if (wsRef.current === ws) connect();
       }, delay);
     };
-    ws.onerror = () => ws.close();
+    ws.onerror = () => {
+      // Ignore the error event: the browser will fire onclose next, which
+      // drives the reconnect/backoff. Closing here can race onclose and
+      // swallow the retry.
+    };
   }, []);
 
   useEffect(() => {

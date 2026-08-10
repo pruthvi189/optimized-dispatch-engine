@@ -26,7 +26,6 @@ export const api = {
   resume: () => post("/sim/resume"),
   step: (minutes = 5) => post("/sim/step", { minutes }),
   reset: (cfg: RunnerConfig) => post("/sim/reset", cfg),
-  decisions: () => req<unknown[]>("/dispatch/decisions?limit=100"),
 };
 
 export function wsUrl(cfg: Pick<RunnerConfig, "scenario" | "seed" | "policy" | "speed">): string {
