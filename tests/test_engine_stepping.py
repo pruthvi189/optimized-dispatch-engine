@@ -32,6 +32,7 @@ def test_stepped_run_matches_one_shot(tmp_path, steps):
             break
     if not eng.is_finished:
         eng.advance(total)
+    eng.drain()
     eng.finalize()
 
     h1 = hashlib.sha256((out1 / "event_log.csv").read_bytes()).hexdigest()

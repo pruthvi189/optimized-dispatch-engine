@@ -182,7 +182,7 @@ class SimulationRunner:
             self._finalized = True
 
     def _advance(self, engine, minutes):
-        end = min(engine.env.now + minutes, engine.total_minutes)
+        end = min(engine.env.now + minutes, engine.hard_stop)
         engine.advance(end)
         if engine.is_finished and not self._finalized:
             engine.finalize()

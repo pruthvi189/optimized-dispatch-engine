@@ -7,3 +7,5 @@ __pycache__/
 .pytest_cache/
 dashboard/node_modules/
 dashboard/dist/
+artifacts_v2/
+processes.txt

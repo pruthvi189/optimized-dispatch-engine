@@ -66,6 +66,6 @@ def test_low_staffing_increases_prep():
     well_staffed = Kitchen(kitchen_id=1, staff_level=4)
     under_staffed = Kitchen(kitchen_id=2, staff_level=2)
 
-    a = sample_prep_time(rng, _order(OrderComplexity.SIMPLE, 1, 0), well_staffed, weather, traffic, config)
-    b = sample_prep_time(rng, _order(OrderComplexity.SIMPLE, 1, 0), under_staffed, weather, traffic, config)
-    assert b > a
+    a = [sample_prep_time(rng, _order(OrderComplexity.SIMPLE, 1, 0), well_staffed, weather, traffic, config) for _ in range(100)]
+    b = [sample_prep_time(rng, _order(OrderComplexity.SIMPLE, 1, 0), under_staffed, weather, traffic, config) for _ in range(100)]
+    assert sum(b) / len(b) > sum(a) / len(a)

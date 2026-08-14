@@ -1,3 +1,4 @@
+import copy
 import os
 
 import yaml
@@ -5,8 +6,9 @@ import yaml
 DEFAULT_CONFIG = {
     "seed": 42,
     "days": 1,
+    "drain_timeout_min": 240,  # extra sim minutes allowed to finish in-flight orders
     "kitchens": {"count": 3, "staff_level": 3},
-    "riders": {"count": 8, "speed_kmh": 25.0},
+    "riders": {"count": 10, "speed_kmh": 22.0},
     "demand_multiplier": 1.0,
     "orders": {
         "items_weights": [0.5, 0.3, 0.2],
@@ -71,7 +73,7 @@ def load_scenario(name: str, seed: int | None = None) -> dict:
         raise FileNotFoundError(f"Scenario '{name}' not found at {path}")
     with open(path, "r", encoding="utf-8") as f:
         override = yaml.safe_load(f)
-    config = deep_merge(dict(DEFAULT_CONFIG), override or {})
+    config = deep_merge(copy.deepcopy(DEFAULT_CONFIG), override or {})
     if seed is not None:
         config["seed"] = seed
     return config

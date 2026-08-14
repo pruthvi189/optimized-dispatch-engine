@@ -14,21 +14,32 @@ from .rng import spawn_streams
 
 DISPATCH_STREAM_SALT = 1_000_000
 
+# Step size for the post-generation drain. Small enough that the finish time of
+# the last order is reported to within one step.
+DRAIN_STEP_MIN = 1.0
+
+# Statuses that mean an order will never finish on its own.
+_TERMINAL_STATUS = (OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.FAILED)
+
 
 class SimulationEngine:
     """Single public entry point. Runs a SimPy simulation from a config dict."""
 
-    def __init__(self, config: dict, out_dir: str, scenario_name: str = "unknown"):
+    def __init__(self, config: dict, out_dir: str, scenario_name: str = "unknown", save_outputs: bool = True):
         self.config = config
         self.out_dir = out_dir
         self.scenario_name = scenario_name
+        self.save_outputs = save_outputs
         self.total_minutes = config["days"] * 1440
         self.env = simpy.Environment()
         self.streams = spawn_streams(config["seed"])
         # Dedicated dispatch stream: derived, NOT appended to rng.STREAMS, so the
         # five Phase 1/2 streams keep their exact seeds (byte-identical determinism).
         self.streams["dispatch"] = np.random.default_rng(config["seed"] + DISPATCH_STREAM_SALT)
-        self.event_log = EventLog(out_dir=self.out_dir)
+        # Deterministic per-run identity so pooled training CSVs from different
+        # runs (order_id resets to 1 every run) never collapse onto each other.
+        self.run_id = f"{scenario_name}_seed{config['seed']}"
+        self.event_log = EventLog(out_dir=self.out_dir if save_outputs else None, run_id=self.run_id)
         self.order_counter = itertools.count(1)
         self.all_orders = []
         self.summary = {}
@@ -82,26 +93,50 @@ class SimulationEngine:
         self.order_generator = OrderGenerator(
             self.env, self.streams["arrivals"], self.streams["prep"], config,
             self.kitchens, self.event_log, self.order_counter, dispatcher=self.dispatcher,
+            generation_end_min=self.total_minutes,
         )
         self.order_generator.all_orders = self.all_orders
 
+    @property
+    def hard_stop(self) -> float:
+        """Latest sim time this run will reach: the generation window plus the
+        drain timeout. Both policies use the identical rule."""
+        return self.total_minutes + self.config.get("drain_timeout_min", 240)
+
+    def _update_finished(self):
+        if self.env.now < self.total_minutes:
+            self.is_finished = False
+            return
+        all_terminal = all(o.status in _TERMINAL_STATUS for o in self.all_orders) if self.all_orders else True
+        self.is_finished = self.env.now >= self.hard_stop or all_terminal
+
     def advance(self, until: float):
         """Advance the simulation to `until` (sim minutes). Callable repeatedly;
-        equivalent to a single env.run(until) over the same window."""
-        self.env.run(until=min(until, self.total_minutes))
-        if self.env.now >= self.total_minutes:
-            self.is_finished = True
+        equivalent to a single env.run(until) over the same window. The run is
+        only finished once the generation window AND the drain are complete."""
+        self.env.run(until=until)
+        self._update_finished()
+
+    def drain(self):
+        """Advance in small steps until every order is terminal (completed,
+        cancelled or failed) or the drain timeout expires. Called after the
+        generation window so late-arriving orders still finish. The rule is
+        identical for both policies, so it adds no comparison bias."""
+        while not self.is_finished:
+            self.advance(min(self.env.now + DRAIN_STEP_MIN, self.hard_stop))
 
     def finalize(self):
         self._collect_orders()
-        self.event_log.write()
-        self.event_log.write_orders_csv(self.orders)
+        if self.save_outputs:
+            self.event_log.write()
+            self.event_log.write_orders_csv(self.orders)
         self._summarize()
         return self.summary
 
     def run(self):
         self._setup()
         self.advance(self.total_minutes)
+        self.drain()
         return self.finalize()
 
     def _collect_orders(self):
@@ -124,6 +159,9 @@ class SimulationEngine:
         }
         if self.dispatcher is not None:
             from dispatch.metrics import compute_metrics
+            # sim_length = actual end of simulation (generation + drain), so
+            # riders who were still carrying an order at the generation cutoff
+            # are credited their full busy time.
             self.summary.update(
-                compute_metrics(self.orders, self.riders.riders, self.config["days"] * 1440, self.config)
+                compute_metrics(self.orders, self.riders.riders, self.env.now, self.config)
             )

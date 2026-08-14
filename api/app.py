@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .broadcast import WebSocketHub
 from .config import build_config
-from .routers import dispatch, orders, prediction, sim
+from .routers import analysis, dispatch, experiment, orders, prediction, sim
 from .runner import SimulationRunner
 from .schemas import RunnerConfigIn
 
@@ -48,6 +48,8 @@ def create_app(initial: RunnerConfigIn | None = None, autostart: bool = False,
     app.include_router(prediction.router)
     app.include_router(dispatch.router)
     app.include_router(sim.router)
+    app.include_router(analysis.router)
+    app.include_router(experiment.router)
 
     @app.websocket("/ws")
     async def ws(websocket: WebSocket):

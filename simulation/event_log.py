@@ -7,7 +7,7 @@ from .entities import OrderStatus
 EVENT_COLUMNS = ["sim_time", "event_type", "order_id", "kitchen_id", "rider_id", "payload_json"]
 
 ORDER_COLUMNS = [
-    "order_id", "kitchen_id", "placed_at", "hour_of_day", "day_of_week",
+    "run_id", "order_id", "kitchen_id", "placed_at", "hour_of_day", "day_of_week",
     "order_complexity", "items_count", "workload_at_placement", "staff_level",
     "weather_severity", "traffic_severity", "actual_prep_duration_min",
     "status", "cancel_reason",
@@ -21,9 +21,11 @@ ORDER_COLUMNS = [
 class EventLog:
     """Buffered writer for the raw event log; builder for the orders table."""
 
-    def __init__(self, out_dir: str):
+    def __init__(self, out_dir: str | None, run_id: str | None = None):
         self.out_dir = out_dir
-        os.makedirs(out_dir, exist_ok=True)
+        self.run_id = run_id
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
         self.events = []
 
     def record(self, sim_time, event_type, order_id=None, kitchen_id=None, rider_id=None, payload=None):
@@ -37,6 +39,8 @@ class EventLog:
         })
 
     def write(self):
+        if not self.out_dir:
+            return
         path = os.path.join(self.out_dir, "event_log.csv")
         with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=EVENT_COLUMNS)
@@ -44,12 +48,15 @@ class EventLog:
             writer.writerows(self.events)
 
     def write_orders_csv(self, orders):
+        if not self.out_dir:
+            return
         path = os.path.join(self.out_dir, "orders.csv")
         with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=ORDER_COLUMNS)
             writer.writeheader()
             for o in orders:
                 writer.writerow({
+                    "run_id": self.run_id or "",
                     "order_id": o.order_id,
                     "kitchen_id": o.kitchen_id,
                     "placed_at": round(o.placed_at, 2),

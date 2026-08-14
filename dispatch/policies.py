@@ -2,6 +2,7 @@ from dataclasses import dataclass, field, asdict
 
 from .eta import compute_eta
 from .state import DispatchState
+from simulation.environment import forecast_traffic
 
 
 @dataclass
@@ -70,13 +71,53 @@ class ImmediateDispatch(DispatchPolicy):
 class AdaptiveDispatch(DispatchPolicy):
     """Times dispatch so the rider reaches the kitchen just as the order is
     predicted ready, plus a dynamic risk buffer from prediction uncertainty
-    and live kitchen congestion."""
+    and live kitchen congestion. Dispatch is also promise-aware: if food-
+    readiness timing would make the order miss its delivery SLA, the rider is
+    dispatched earlier (toward the latest safe time) so the promise stays
+    reachable."""
 
     name = "adaptive"
 
     def __init__(self, predictor, config):
         self.predictor = predictor
         self.config = config
+
+    def _customer_leg(self, order, state, leg_start: float | None = None) -> float:
+        """Predicted rider travel from kitchen to customer (minutes). Uses the
+        forecast traffic at the leg's start time rather than dispatch-time
+        traffic. `leg_start` is when the rider departs the kitchen (sim
+        minutes); defaults to `now` when the start time is unknown."""
+        d = self.config["dispatch"]
+        wf = d["weather_speed_factor"][state.weather_severity]
+        speed_kmh = self.config["riders"]["speed_kmh"]
+        base = order.distance_km / speed_kmh * 60.0
+        sev = forecast_traffic(leg_start if leg_start is not None else state.now, base)
+        tf = d["traffic_speed_factor"][sev.value]
+        return base * tf * wf
+
+    def _clamp_to_promise(self, order, state, prep_mean, dispatch_at, travel) -> float:
+        """Promise-aware clamp: never dispatch so late that the delivery SLA is
+        already out of reach. Returns (dispatch_at, clamped_bool)."""
+        d = self.config["dispatch"]
+        promise = d["promised_delivery_min"]
+        pickup = d["pickup_time_min"]
+        # When does the rider actually start the customer leg? Arrive at the
+        # kitchen, wait out any food-readiness gap, then pick up.
+        rider_arrival = dispatch_at + travel
+        food_wait = max(0.0, state.now + prep_mean - rider_arrival)
+        leg_start = rider_arrival + food_wait + pickup
+        cust_leg = self._customer_leg(order, state, leg_start=leg_start)
+
+        # Latest kitchen arrival that still meets the SLA (assuming the rider
+        # does not wait on food): budget = placed + promise - pickup - cust_leg.
+        budget = order.placed_at + promise - pickup - cust_leg
+        latest_dispatch = budget - travel
+
+        # If even immediate dispatch cannot have the food ready in time, send
+        # the rider now anyway (best effort).
+        if state.now + prep_mean > budget:
+            return state.now, True
+        return min(dispatch_at, latest_dispatch), dispatch_at > latest_dispatch
 
     def decide(self, order, state: DispatchState) -> DispatchDecision:
         d = self.config["dispatch"]
@@ -102,6 +143,10 @@ class AdaptiveDispatch(DispatchPolicy):
         dispatch_at = state.now + prep_est - state.travel_to_kitchen_min - buffer
         dispatch_at = max(state.now, dispatch_at)
 
+        dispatch_at, clamped = self._clamp_to_promise(
+            order, state, prep_mean, dispatch_at, state.travel_to_kitchen_min
+        )
+
         eta = compute_eta(
             now=state.now,
             prep_mean=prep_mean,
@@ -118,6 +163,8 @@ class AdaptiveDispatch(DispatchPolicy):
             f"travel_to_kitchen={state.travel_to_kitchen_min:.2f}, "
             f"buffer={buffer:.2f} ({pred['uncertainty']})"
         )
+        if clamped:
+            rationale += f", promise-clamped to {dispatch_at:.2f}"
         return DispatchDecision(
             dispatch_at=dispatch_at,
             policy=self.name,

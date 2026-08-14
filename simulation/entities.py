@@ -93,7 +93,7 @@ class Kitchen:
 class Rider:
     rider_id: int
     status: RiderStatus = RiderStatus.IDLE
-    speed_kmh: float = 25.0
+    speed_kmh: float = 22.0
     location_km: float = 0.0
     assigned_at: float | None = None
     busy_min: float = 0.0

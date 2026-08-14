@@ -51,7 +51,8 @@ def sample_distance_km(rng, config) -> float:
 class OrderGenerator:
     """Non-homogeneous Poisson arrivals driven by a per-hour demand curve."""
 
-    def __init__(self, env, rng, prep_rng, config, kitchens, event_log, order_counter, dispatcher=None):
+    def __init__(self, env, rng, prep_rng, config, kitchens, event_log, order_counter, dispatcher=None,
+                 generation_end_min: float = float("inf")):
         self.env = env
         self.rng = rng
         self.prep_rng = prep_rng
@@ -62,6 +63,9 @@ class OrderGenerator:
         self.dispatcher = dispatcher
         self.all_orders = []
         self.demand_multiplier = config["demand_multiplier"]
+        # No orders are placed at or after this sim time (end of the generation
+        # window). The drain period that follows only lets existing orders finish.
+        self.generation_end_min = generation_end_min
         curve = config.get("demand_curve")
         self.curve = tuple(curve) if curve else DEFAULT_DEMAND_CURVE
         self.env.process(self._run())
@@ -76,6 +80,8 @@ class OrderGenerator:
         while True:
             rate = self._rate()
             interarrival = self.rng.exponential(60.0 / max(rate, 1e-9))
+            if self.env.now + interarrival > self.generation_end_min:
+                return
             yield self.env.timeout(interarrival)
             order = self._create_order()
             self.event_log.record(
@@ -98,7 +104,6 @@ class OrderGenerator:
         kitchen = self.rng.choice(self.kitchens)
         items = sample_items(self.rng, self.config)
         distance = sample_distance_km(self.rng, self.config)
-        workload = len(kitchen.current_orders)
         order = Order(
             order_id=order_id,
             kitchen_id=kitchen.kitchen_id,
@@ -106,9 +111,15 @@ class OrderGenerator:
             items=items,
             complexity=complexity_from_items(items),
             distance_km=distance,
-            workload_at_placement=workload,
             staff_level=kitchen.staff_level,
         )
         kitchen.current_orders.append(order)
+        # Feature snapshots at PLACEMENT (matching what the dispatcher sees at
+        # decision time). The workload is measured AFTER appending the order so
+        # it matches inference: DispatchState.kitchen_queue_lens already counts
+        # the newly placed order when the policy runs.
+        order.workload_at_placement = len(kitchen.current_orders)
+        order.weather_severity = self.env._weather.current_severity().value
+        order.traffic_severity = self.env._traffic.current_severity().value
         self.all_orders.append(order)
         return order

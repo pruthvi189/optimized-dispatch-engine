@@ -1,65 +1,48 @@
+"""Split-conformal prediction intervals.
+
+An 80% prediction interval is calibrated on a HOLD-OUT calibration split
+(train/calibration/test) using the absolute residuals of the point model, so the
+reported coverage is an honest out-of-sample statement — no tuning on the test
+set, and no in-sample coverage search.
+
+The interval is centered on the point prediction (prep_mean ± qhat), which makes
+the dispatch mean and the interval consistent, unlike the previous quantile
+midpoint widening that could shift the interval away from the forecast the
+dispatch policy actually uses.
+"""
+
 import numpy as np
-from sklearn.model_selection import KFold
-
-from .train import train_quantile, HAS_LIGHTGBM
-
-ALPHA_LOW = 0.10
-ALPHA_HIGH = 0.90
 
 
-def fit_quantiles(X_train, y_train, nominal=0.80):
-    """Fit low (10th) and high (90th) percentile LightGBM regressors,
-    then calibrate a widening multiplier via cross-validated out-of-fold
-    predictions so the interval generalizes to ~nominal coverage."""
-    q_low = train_quantile(X_train, y_train, ALPHA_LOW)
-    q_high = train_quantile(X_train, y_train, ALPHA_HIGH)
-    if q_low is None or q_high is None:
-        return q_low, q_high, 1.0
+def fit_calibration(model, X_calib, y_calib, nominal=0.80):
+    """Return the conformal quantile qhat from absolute residuals on a held-out
+    calibration set.
 
-    cov = interval_empirical_coverage(
-        y_train, q_low.predict(X_train), q_high.predict(X_train)
-    )
-    if cov <= 0.0:
-        return q_low, q_high, 1.0
-    if cov >= nominal:
-        return q_low, q_high, 1.0
-
-    oof_low = np.full_like(y_train, np.nan, dtype=float)
-    oof_high = np.full_like(y_train, np.nan, dtype=float)
-    kfold = KFold(n_splits=5, shuffle=True, random_state=42)
-    for train_idx, val_idx in kfold.split(X_train):
-        lo = train_quantile(X_train[train_idx], y_train[train_idx], ALPHA_LOW)
-        hi = train_quantile(X_train[train_idx], y_train[train_idx], ALPHA_HIGH)
-        if lo is None or hi is None:
-            return q_low, q_high, 1.0
-        oof_low[val_idx] = lo.predict(X_train[val_idx])
-        oof_high[val_idx] = hi.predict(X_train[val_idx])
-
-    mid = (oof_low + oof_high) / 2.0
-    half = np.maximum((oof_high - oof_low) / 2.0, 1e-6)
-
-    factor = 1.0
-    for _ in range(50):
-        low = mid - factor * half
-        high = mid + factor * half
-        if interval_empirical_coverage(y_train, low, high) >= nominal:
-            break
-        factor *= 1.1
-    return q_low, q_high, factor
+    With the finite-sample correction the resulting interval [pred - qhat,
+    pred + qhat] has marginal coverage >= nominal on new data (assuming
+    exchangeability between calibration and future data). qhat is a single
+    scalar width added to the point prediction in both directions.
+    """
+    residuals = np.abs(np.asarray(y_calib) - np.asarray(model.predict(X_calib)))
+    n = len(residuals)
+    if n == 0:
+        raise ValueError("calibration set is empty")
+    alpha = 1.0 - nominal
+    level = min(1.0, (n + 1) / n * (1.0 - alpha))
+    return float(max(np.quantile(residuals, level), 0.0))
 
 
-def predict_interval(q_low, q_high, X, factor=1.0):
-    low = q_low.predict(X)
-    high = q_high.predict(X)
-    if factor != 1.0:
-        mid = (low + high) / 2.0
-        half = np.maximum((high - low) / 2.0, 1e-6) * factor
-        low, high = mid - half, mid + half
+def conformal_interval(prep_mean, qhat):
+    """Interval centered on the point prediction: [mean - qhat, mean + qhat]."""
+    low = max(0.0, float(prep_mean) - qhat)
+    high = float(prep_mean) + qhat
     return low, high
 
 
 def interval_empirical_coverage(y_true, y_low, y_high):
     """Fraction of true values inside the predicted interval."""
+    y_low = np.asarray(y_low)
+    y_high = np.asarray(y_high)
     inside = (y_true >= y_low) & (y_true <= y_high)
     return float(np.mean(inside))
 
@@ -67,7 +50,7 @@ def interval_empirical_coverage(y_true, y_low, y_high):
 def interval_width_std(y_low, y_high, y_train):
     """Normalize interval width by training residual std for tier thresholds."""
     residuals_std = float(np.std(y_train))
-    widths = y_high - y_low
+    widths = np.asarray(y_high) - np.asarray(y_low)
     return float(np.mean(widths)), max(residuals_std, 1e-9)
 
 
@@ -81,17 +64,20 @@ def uncertainty_tier(width, width_std, train_std):
     return "high"
 
 
-def evaluate_uncertainty(q_low, q_high, X_test, y_test, y_train, factor=1.0):
-    if q_low is None or q_high is None:
-        return None
-    y_low, y_high = predict_interval(q_low, q_high, X_test, factor=factor)
-    coverage = interval_empirical_coverage(y_test, y_low, y_high)
-    width, train_std = interval_width_std(y_low, y_high, y_train)
+def evaluate_uncertainty(model, X_test, y_test, train_std, qhat, nominal=0.80):
+    """Report honest coverage/width/tier of the conformal interval on a held-out
+    test set (never used during fitting or calibration)."""
+    preds = np.asarray(model.predict(X_test))
+    lows = np.maximum(preds - qhat, 0.0)
+    highs = preds + qhat
+    coverage = interval_empirical_coverage(y_test, lows, highs)
+    width = float(np.mean(highs - lows))
     tier = uncertainty_tier(width, train_std, train_std)
     return {
+        "nominal_coverage": nominal,
         "coverage": coverage,
         "mean_interval_width_min": round(width, 3),
-        "train_std_min": round(train_std, 3),
+        "train_std_min": round(float(train_std), 3),
         "uncertainty_tier": tier,
-        "calibration_factor": factor,
+        "calibration_quantile": round(qhat, 3),
     }

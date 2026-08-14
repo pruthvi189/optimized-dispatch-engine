@@ -150,6 +150,43 @@ def test_pause_step_reset_flow():
         assert s["sim_time_min"] == 0.0
 
 
+# ---- REST: analysis ---------------------------------------------------------
+
+
+def test_analysis_root_causes():
+    with TestClient(_app()) as c:
+        c.post("/sim/start")
+        assert _wait_until(lambda: c.get("/sim/status").json()["finished"])
+        r = c.get("/analysis/root-causes")
+        assert r.status_code == 200
+        body = r.json()
+        assert "aggregate" in body
+        assert "late_orders" in body
+        assert "total_analyzed" in body
+        agg = body["aggregate"]
+        assert "total_orders" in agg
+        assert "late_orders" in agg
+        assert "on_time_rate" in agg
+        assert "root_cause_distribution" in agg
+        assert "primary_cause_percentages" in agg
+
+
+def test_analysis_order_root_cause():
+    with TestClient(_app()) as c:
+        c.post("/sim/start")
+        assert _wait_until(lambda: c.get("/sim/status").json()["finished"])
+        orders = c.get("/orders?status=completed&limit=1").json()
+        assert orders
+        order_id = orders[0]["order_id"]
+        r = c.get(f"/analysis/root-causes/orders/{order_id}")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["order_id"] == order_id
+        assert "is_late" in body
+        assert "primary_root_cause" in body
+        assert "stage_durations" in body
+
+
 # ---- websocket streaming ---------------------------------------------------
 
 

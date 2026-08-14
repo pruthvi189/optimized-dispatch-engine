@@ -52,6 +52,36 @@ def test_pool_orders(sample_orders, tmp_path):
     assert TARGET in df.columns
 
 
+def test_pool_orders_keeps_independent_runs(sample_orders, tmp_path):
+    """Different runs share order_id (it resets per run): with run_id present,
+    rows from separate runs must NOT be deduped onto each other."""
+    import pandas as pd
+
+    p1 = tmp_path / "run_a.csv"
+    p2 = tmp_path / "run_b.csv"
+    rows1 = [{**row, "run_id": "normal_seed1"} for row in sample_orders]
+    rows2 = [{**row, "run_id": "normal_seed2"} for row in sample_orders]
+    pd.DataFrame(rows1).to_csv(p1, index=False)
+    pd.DataFrame(rows2).to_csv(p2, index=False)
+    df = pool_orders([str(p1), str(p2)])
+    assert len(df) == 40
+    assert df["run_id"].nunique() == 2
+
+
+def test_pool_orders_dedupes_same_run_duplicates(sample_orders, tmp_path):
+    """The same run copied across files (same run_id) must still collapse to one copy."""
+    import pandas as pd
+
+    p1 = tmp_path / "dup1.csv"
+    p2 = tmp_path / "dup2.csv"
+    rows = [{**row, "run_id": "normal_seed1"} for row in sample_orders]
+    pd.DataFrame(rows).to_csv(p1, index=False)
+    pd.DataFrame(rows).to_csv(p2, index=False)
+    df = pool_orders([str(p1), str(p2)])
+    assert len(df) == 20
+    assert (df["order_id"].values == np.arange(20)).all()
+
+
 def test_add_cyclical_hour(sample_orders):
     import pandas as pd
 

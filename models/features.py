@@ -16,7 +16,13 @@ VALID_TRAFFIC = ["low", "moderate", "heavy"]
 
 
 def pool_orders(csv_paths):
-    """Concatenate orders.csv files, dedupe by order_id, keep trainable rows."""
+    """Concatenate orders.csv files, dedupe by (run_id, order_id), keep trainable rows.
+
+    order_id resets to 1 at the start of every simulation run, so an order's
+    identity is (run_id, order_id). Deduping by order_id alone collapses
+    independent runs onto each other. Runs carrying a run_id column are keyed on
+    both columns; legacy CSVs without the column fall back to order_id-only dedup.
+    """
     frames = []
     for path in csv_paths:
         df = pd.read_csv(path)
@@ -24,7 +30,10 @@ def pool_orders(csv_paths):
     if not frames:
         raise ValueError("no order CSVs provided")
     df = pd.concat(frames, ignore_index=True)
-    df = df.drop_duplicates(subset="order_id", keep="first")
+    if "run_id" in df.columns:
+        df = df.drop_duplicates(subset=["run_id", "order_id"], keep="first")
+    else:
+        df = df.drop_duplicates(subset="order_id", keep="first")
     df = df[df["status"].isin(KEEP_STATUS)]
     df = df.dropna(subset=[TARGET])
     return df.reset_index(drop=True)
@@ -89,3 +98,22 @@ def temporal_split(df, frac=0.8):
     test = df.iloc[cutoff:].copy()
     assert train["placed_at"].max() <= test["placed_at"].min(), "temporal leakage in split"
     return train, test
+
+
+def temporal_three_way_split(df, train_frac=0.7, calib_frac=0.15):
+    """Strictly time-ordered train/calibration/test split for conformal calibration.
+
+    The calibration set is held out from training so prediction-interval coverage
+    can be tuned on it instead of the test set (which stays untouched for the
+    final evaluation). Order boundaries never overlap in time.
+    """
+    df = df.sort_values("placed_at").reset_index(drop=True)
+    n = len(df)
+    train_cut = int(n * train_frac)
+    calib_cut = train_cut + int(n * calib_frac)
+    train = df.iloc[:train_cut].copy()
+    calib = df.iloc[train_cut:calib_cut].copy()
+    test = df.iloc[calib_cut:].copy()
+    assert train["placed_at"].max() <= calib["placed_at"].min(), "temporal leakage train->calib"
+    assert calib["placed_at"].max() <= test["placed_at"].min(), "temporal leakage calib->test"
+    return train, calib, test

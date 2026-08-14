@@ -167,6 +167,16 @@ def test_fair_compare_identical_arrivals_prep_and_hub(tmp_path):
     prep_a = ada.dropna(subset=["actual_prep_duration_min"])
     assert (prep_i["actual_prep_duration_min"].values == prep_a["actual_prep_duration_min"].values).all()
 
+    # Pairing + drain invariants: the same status and cancel_reason per order
+    # (so the two policies observed identical upstream events), and no order
+    # left in-flight after the drain.
+    for col in ("status", "cancel_reason"):
+        i_vals = imp[col].fillna("").values
+        a_vals = ada[col].fillna("").values
+        assert (i_vals == a_vals).all(), col
+    assert set(imp["status"]).issubset({"completed", "cancelled"})
+    assert set(ada["status"]).issubset({"completed", "cancelled"})
+
 
 # ---- Cancellation: rider cancel redispatch ---------------------------------
 

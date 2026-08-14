@@ -7,6 +7,9 @@ import { DecisionTable } from "./components/DecisionTable";
 import { EventLog } from "./components/EventLog";
 import { Controls } from "./components/Controls";
 import { ComparePanel } from "./components/ComparePanel";
+import { RootCausePanel } from "./components/RootCausePanel";
+import { ExperimentPanel } from "./components/ExperimentPanel";
+import { DeliveryDistributionPanel } from "./components/DeliveryDistributionPanel";
 import { useSimStream } from "./useSimStream";
 import { useCompare } from "./useCompare";
 import { api } from "./api";
@@ -86,6 +89,18 @@ export default function App() {
           </div>
           <ComparePanel state={compare.state} />
         </div>
+      </section>
+
+      <section className="section">
+        <RootCausePanel />
+      </section>
+
+      <section className="section">
+        <ExperimentPanel />
+      </section>
+
+      <section className="section">
+        <DeliveryDistributionPanel />
       </section>
     </div>
   );

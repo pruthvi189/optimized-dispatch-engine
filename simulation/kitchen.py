@@ -38,12 +38,12 @@ def kitchen_process(env, rng, config, order: Order, kitchens, event_log):
 
     with kitchen.resource.request() as req:
         yield req
-        order.workload_at_placement = len(kitchen.current_orders)
-
+        # NOTE: workload/weather/traffic features are snapshotted at PLACEMENT
+        # in OrderGenerator._create_order and must NOT be overwritten here
+        # (prep-start state is not known at placement time). Only the actual
+        # prep duration below uses prep-time conditions.
         weather = getattr(env, "_weather")
         traffic = getattr(env, "_traffic")
-        order.weather_severity = weather.current_severity().value
-        order.traffic_severity = traffic.current_severity().value
 
         duration = sample_prep_time(rng, order, kitchen, weather, traffic, config)
         yield env.timeout(duration)

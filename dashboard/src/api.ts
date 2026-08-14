@@ -1,4 +1,4 @@
-import type { RunnerConfig, Snapshot } from "./types";
+import type { RunnerConfig, Snapshot, RootCausesResponse, RootCauseAnalysis, ExperimentResultsResponse, ExperimentStatusResponse, ExperimentRunRequest } from "./types";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -26,6 +26,18 @@ export const api = {
   resume: () => post("/sim/resume"),
   step: (minutes = 5) => post("/sim/step", { minutes }),
   reset: (cfg: RunnerConfig) => post("/sim/reset", cfg),
+
+  // Analysis endpoints
+  rootCauses: () => req<RootCausesResponse>("/analysis/root-causes"),
+  orderRootCause: (orderId: number) => req<RootCauseAnalysis>(`/analysis/root-causes/orders/${orderId}`),
+
+  // Experiment endpoints
+  runExperiment: (body: ExperimentRunRequest) => req<{ status: string; config: ExperimentRunRequest }>("/experiments/run", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
+  experimentStatus: () => req<ExperimentStatusResponse>("/experiments/status"),
+  experimentResults: (outDir?: string) => req<ExperimentResultsResponse>(`/experiments/results${outDir ? `?out_dir=${encodeURIComponent(outDir)}` : ""}`),
 };
 
 export function wsUrl(cfg: Pick<RunnerConfig, "scenario" | "seed" | "policy" | "speed">): string {

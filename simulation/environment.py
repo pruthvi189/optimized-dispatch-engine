@@ -10,17 +10,19 @@ WEATHER_FACTORS = {
 
 TRAFFIC_FACTORS = {
     TrafficSeverity.LOW: 1.0,
-    TrafficSeverity.MODERATE: 1.1,
-    TrafficSeverity.HEAVY: 1.3,
+    TrafficSeverity.MODERATE: 1.2,
+    TrafficSeverity.HEAVY: 1.55,
 }
 
-# Hour-of-day baseline traffic severity index: 0=low, 1=moderate, 2=heavy
+# Hour-of-day baseline traffic severity index: 0=low, 1=moderate, 2=heavy.
+# Bangalore profile (TomTom 2025): night is clear, morning peak 08-11, evening
+# peak 17-21, and midday stays congested (never fully clears).
 TRAFFIC_BASELINE_BY_HOUR = (
     (0, 6, 0),
-    (6, 9, 1),
-    (9, 16, 0),
-    (16, 19, 1),
-    (19, 21, 2),
+    (6, 8, 1),
+    (8, 11, 2),
+    (11, 17, 1),
+    (17, 21, 2),
     (21, 24, 1),
 )
 
@@ -30,6 +32,15 @@ def traffic_baseline(hour: int) -> TrafficSeverity:
         if start <= hour < end:
             return [TrafficSeverity.LOW, TrafficSeverity.MODERATE, TrafficSeverity.HEAVY][idx]
     return TrafficSeverity.LOW
+
+
+def forecast_traffic(now: float, travel_min: float) -> TrafficSeverity:
+    """Expected traffic severity during a trip that starts at `now` (sim minutes)
+    and lasts ~travel_min minutes. Resolved from the deterministic hour-of-day
+    baseline at the trip's midpoint; random spike events are unknown a priori,
+    so the forecast is the expected (baseline) condition, not the realized one."""
+    midpoint = now + travel_min / 2.0
+    return traffic_baseline(int(midpoint // 60) % 24)
 
 
 class WeatherGenerator:

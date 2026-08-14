@@ -42,7 +42,10 @@ weather_speed_factor:
   clear: 1.0
   rain: 1.15
   storm: 1.3
+# Travel time multipliers by severity. Calibrated to Bangalore two-wheeler
+# door-to-door delivery: base speed 22 km/h, heavy traffic ~14 km/h (TomTom
+# 2025 congestion index: heavy Bangalore peak traffic runs 1.55x travel time).
 traffic_speed_factor:
   low: 1.0
   moderate: 1.2
-  heavy: 1.35
+  heavy: 1.55
