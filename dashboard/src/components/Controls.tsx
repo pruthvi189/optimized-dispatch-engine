@@ -1,5 +1,5 @@
 import type { RunnerConfig, Snapshot } from "../types";
-import { POLICIES, SCENARIOS } from "../types";
+import { ALL_POLICIES, MAIN_POLICIES, SCENARIOS } from "../types";
 
 type Action = "start" | "pause" | "resume" | "step" | "reset";
 
@@ -9,12 +9,19 @@ interface Props {
   snap: Snapshot | null;
   busy: boolean;
   onAction: (kind: Action) => void;
+  /** When true, show only the two main policies (Baseline / Optimized). */
+  mainMode?: boolean;
 }
 
-export function Controls({ cfg, setCfg, snap, busy, onAction }: Props) {
+export function Controls({ cfg, setCfg, snap, busy, onAction, mainMode }: Props) {
   const running = snap?.running ?? false;
   const paused = snap?.paused ?? false;
   const finished = snap?.finished ?? false;
+
+  const policies = mainMode ? MAIN_POLICIES.map((p) => p.key) : ALL_POLICIES;
+  const policyLabel = mainMode
+    ? MAIN_POLICIES.find((p) => p.key === cfg.policy)?.label ?? cfg.policy
+    : undefined;
 
   const set = <K extends keyof RunnerConfig>(k: K, v: RunnerConfig[K]) =>
     setCfg({ ...cfg, [k]: v });
@@ -30,9 +37,16 @@ export function Controls({ cfg, setCfg, snap, busy, onAction }: Props) {
         </div>
         <div className="field">
           <label htmlFor="cfg-policy">policy</label>
-          <select id="cfg-policy" value={cfg.policy} disabled={busy} onChange={(e) => set("policy", e.target.value)}>
-            {POLICIES.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
+          <div className="policy-wrap">
+            <select id="cfg-policy" value={cfg.policy} disabled={busy} onChange={(e) => set("policy", e.target.value)}>
+              {policies.map((p) => (
+                <option key={p} value={p}>
+                  {mainMode ? (MAIN_POLICIES.find((mp) => mp.key === p)?.label ?? p) : p}
+                </option>
+              ))}
+            </select>
+            {policyLabel && <span className="policy-pill" title="active policy">{policyLabel}</span>}
+          </div>
         </div>
         <div className="field">
           <label htmlFor="cfg-seed">seed</label>

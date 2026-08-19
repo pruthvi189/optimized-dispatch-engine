@@ -1,4 +1,4 @@
-import type { RunnerConfig, Snapshot, RootCausesResponse, RootCauseAnalysis, ExperimentResultsResponse, ExperimentStatusResponse, ExperimentRunRequest } from "./types";
+import type { RunnerConfig, Snapshot, RootCausesResponse, ExperimentResultsResponse, ExperimentStatusResponse, ExperimentRunRequest } from "./types";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -20,7 +20,6 @@ const post = (path: string, body?: unknown) =>
 
 export const api = {
   status: () => req<Snapshot>("/sim/status"),
-  config: () => req<RunnerConfig>("/sim/config"),
   start: () => post("/sim/start"),
   pause: () => post("/sim/pause"),
   resume: () => post("/sim/resume"),
@@ -29,7 +28,6 @@ export const api = {
 
   // Analysis endpoints
   rootCauses: () => req<RootCausesResponse>("/analysis/root-causes"),
-  orderRootCause: (orderId: number) => req<RootCauseAnalysis>(`/analysis/root-causes/orders/${orderId}`),
 
   // Experiment endpoints
   runExperiment: (body: ExperimentRunRequest) => req<{ status: string; config: ExperimentRunRequest }>("/experiments/run", {

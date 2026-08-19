@@ -70,9 +70,11 @@ def analyze_order(order: Order, promised_delivery_min: float) -> RootCauseAnalys
     # Calculate stage durations
     stages = StageDurations()
 
-    # Kitchen queue: time from order placed to prep started
-    if order.prep_started_at is not None and order.placed_at is not None:
-        stages.kitchen_queue = max(0.0, order.prep_started_at - order.placed_at)
+    # Kitchen queue: time from entering the kitchen queue to prep start.
+    # Fall back to placement time for orders created before this field existed.
+    if order.prep_started_at is not None:
+        queue_start = order.entered_kitchen_at if order.entered_kitchen_at is not None else order.placed_at
+        stages.kitchen_queue = max(0.0, order.prep_started_at - queue_start)
 
     # Kitchen prep: actual prep duration
     if order.actual_prep_duration_min is not None:
@@ -130,8 +132,10 @@ def _determine_root_cause(
 ) -> tuple[RootCauseCategory, list[RootCauseCategory]]:
     """Determine the primary root cause and contributing factors.
 
-    This uses a heuristic based on the order's timeline and the
-    concept of bottleneck/limiting factor rather than just "longest duration".
+    This is a bottleneck heuristic, NOT causal inference: it labels the stage
+    that most plausibly limited the observed timeline, it does not prove which
+    stage caused the lateness. Based on the order's timeline and the concept of
+    bottleneck/limiting factor rather than just "longest duration".
     """
     # For adaptive dispatch, the dispatch delay might be negative (dispatched before order)
     # In that case, dispatch_delay is 0
@@ -220,10 +224,11 @@ def _determine_root_cause(
             contributing.append(max_stage)
 
     # Determine primary cause
-    # Priority order based on operational significance
+    # Priority order based on operational significance. RIDER_AVAILABILITY is
+    # intentionally absent: with the current simulator, a rider is always
+    # eventually assigned, so availability never surfaces as a measurable stage.
     primary_priority = [
         "KITCHEN_PREP",
-        "RIDER_AVAILABILITY",  # Would need to check if no rider was available
         "CUSTOMER_TRAVEL",
         "KITCHEN_QUEUE",
         "DISPATCH_DELAY",
@@ -240,11 +245,6 @@ def _determine_root_cause(
     # Special case: if rider waited at kitchen, kitchen prep is the true bottleneck
     if primary == "RIDER_WAIT_AT_KITCHEN":
         primary = "KITCHEN_PREP"
-
-    # If multiple factors, mark as such
-    if len(contributing) > 1 and primary != "MULTIPLE_FACTORS":
-        # Check if there's a clear dominant factor
-        pass
 
     return primary, contributing
 
@@ -306,64 +306,3 @@ def aggregate_root_causes(analyses: list[RootCauseAnalysis]) -> dict:
         "contributing_factor_counts": contributing_counts,
         "contributing_factor_percentages": contributing_percentages,
     }
-
-
-def format_root_cause_analysis(analysis: RootCauseAnalysis) -> str:
-    """Format a single order's root-cause analysis for display."""
-    lines = [
-        f"ORDER #{analysis.order_id}",
-        "",
-        f"Delivery Time: {analysis.delivery_time_min:.1f} min",
-        f"Promise:       {analysis.promise_time_min:.1f} min",
-        f"Lateness:      {analysis.lateness_min:.1f} min",
-        "",
-        f"Primary Cause: {analysis.primary_root_cause}",
-    ]
-
-    if analysis.contributing_factors:
-        lines.append(f"Contributing:  {', '.join(analysis.contributing_factors)}")
-
-    lines.append("")
-    lines.append("Stage Durations:")
-    sd = analysis.stage_durations
-    lines.append(f"  Kitchen Queue:          {sd.kitchen_queue:.1f} min")
-    lines.append(f"  Kitchen Prep:           {sd.kitchen_prep:.1f} min")
-    lines.append(f"  Dispatch Delay:         {sd.dispatch_delay:.1f} min")
-    lines.append(f"  Rider -> Kitchen:       {sd.rider_to_kitchen:.1f} min")
-    lines.append(f"  Rider Wait at Kitchen:  {sd.rider_wait:.1f} min")
-    lines.append(f"  Kitchen -> Customer:    {sd.customer_travel:.1f} min")
-
-    return "\n".join(lines)
-
-
-def format_aggregate_analysis(aggregate: dict) -> str:
-    """Format aggregate root-cause statistics for display."""
-    lines = [
-        f"Total Orders:  {aggregate['total_orders']}",
-        f"Late Orders:   {aggregate['late_orders']}",
-        f"On-Time Rate:  {aggregate['on_time_rate']:.1%}",
-        "",
-        "ROOT CAUSE DISTRIBUTION (Primary):",
-    ]
-
-    for cause, pct in sorted(
-        aggregate.get("primary_cause_percentages", {}).items(),
-        key=lambda x: x[1],
-        reverse=True
-    ):
-        count = aggregate["root_cause_distribution"].get(cause, 0)
-        bar = "█" * int(pct / 2)
-        lines.append(f"  {cause:<30} {bar} {pct:.1f}% ({count})")
-
-    lines.append("")
-    lines.append("CONTRIBUTING FACTORS:")
-    for factor, pct in sorted(
-        aggregate.get("contributing_factor_percentages", {}).items(),
-        key=lambda x: x[1],
-        reverse=True
-    ):
-        count = aggregate["contributing_factor_counts"].get(factor, 0)
-        bar = "█" * int(pct / 2)
-        lines.append(f"  {factor:<30} {bar} {pct:.1f}% ({count})")
-
-    return "\n".join(lines)

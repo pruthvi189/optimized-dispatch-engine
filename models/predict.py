@@ -72,7 +72,6 @@ class Predictor:
             hour_of_day=features["hour_of_day"],
             order_complexity=features["order_complexity"],
             weather_severity=features["weather_severity"],
-            traffic_severity=features["traffic_severity"],
             kitchen_id=features["kitchen_id"],
         )
         prep_mean = float(self.model.predict(X)[0])

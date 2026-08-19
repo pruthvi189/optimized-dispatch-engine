@@ -5,8 +5,8 @@ import json
 from fastapi import APIRouter, Request
 
 from ..schemas import DispatchIn
-from dispatch.state import DispatchState
-from simulation.entities import Order, OrderComplexity, complexity_from_items
+from dispatch.state import DispatchState, KitchenCandidate, RiderCandidate
+from simulation.entities import Order, complexity_from_items
 from simulation.riders import travel_time_min
 
 router = APIRouter(prefix="/dispatch", tags=["dispatch"])
@@ -26,20 +26,64 @@ def _active_policy(request):
 def _live_state(request, kitchen_id, hour_of_day):
     config = request.app.state.config
     engine = request.app.state.runner.engine
+    kitchen_candidates = None
+    rider_candidates = None
     if engine is not None:
-        now = engine.env.now
         weather = engine.env._weather.current_severity().value
         traffic = engine.env._traffic.current_severity().value
         idle = engine.riders.idle_count()
         queue_lens = {k.kitchen_id: len(k.current_orders) for k in engine.kitchens}
         hub = engine.riders.sample_hub_distance(engine.streams["dispatch"])
+        # Build kitchen candidates from live engine state.
+        ks_cfg = config.get("kitchen_selection", {})
+        kitchen_candidates = [
+            KitchenCandidate(
+                kitchen_id=k.kitchen_id,
+                queue_len=len(k.current_orders),
+                staff_level=k.staff_level,
+                distance_km=0.0,
+            )
+            for k in engine.kitchens
+        ]
     else:
-        now = 0.0
         weather, traffic = "clear", "low"
         idle = config["riders"]["count"]
         queue_lens = {}
         lo, hi = config["dispatch"]["hub_distance_range_km"]
         hub = round((lo + hi) / 2, 3)
+        # Build synthetic kitchen/rider candidates from config for policies
+        # that need them (e.g. NearestHeuristicDispatch).
+        ks = config.get("kitchen_selection", {})
+        kitchen_locs = ks.get("kitchen_locations", [])
+        n_kitchens = config.get("kitchens", {}).get("count", len(kitchen_locs) or 4)
+        staff = config.get("kitchens", {}).get("staff_level", 1)
+        kitchen_candidates = [
+            KitchenCandidate(
+                kitchen_id=i + 1,
+                queue_len=0,
+                staff_level=staff,
+                distance_km=0.0,
+            )
+            for i in range(n_kitchens)
+        ]
+        rider_candidates = [
+            RiderCandidate(
+                rider_id=i + 1,
+                x=0.0,
+                y=0.0,
+                dist_to_kitchens=[0.0] * n_kitchens,
+            )
+            for i in range(idle)
+        ]
+
+    # The caller may ask "what would the policy decide at hour_of_day?" — use
+    # that as the decision clock so the prep-time hour feature and the dispatch
+    # timing reflect the requested hour. Otherwise fall back to live sim time
+    # (or 0.0 when no engine is running).
+    if hour_of_day is not None:
+        now = float(hour_of_day) * 60.0
+    else:
+        now = engine.env.now if engine is not None else 0.0
 
     d = config["dispatch"]
     travel = travel_time_min(
@@ -55,6 +99,8 @@ def _live_state(request, kitchen_id, hour_of_day):
         traffic_severity=traffic,
         hub_distance_km=hub,
         travel_to_kitchen_min=travel,
+        kitchen_candidates=kitchen_candidates,
+        rider_candidates=rider_candidates,
     )
 
 
@@ -64,7 +110,7 @@ def decide(body: DispatchIn, request: Request):
     config = request.app.state.config
     now, state = _live_state(request, body.kitchen_id, body.hour_of_day)
     order = Order(
-        order_id=None,
+        order_id=-1,
         kitchen_id=body.kitchen_id,
         placed_at=now,
         items=body.items_count,
@@ -92,6 +138,7 @@ def recent_decisions(request: Request, limit: int = 50):
                     "policy", "dispatch_at", "predicted_prep_mean", "predicted_prep_low",
                     "predicted_prep_high", "uncertainty", "risk_buffer_min",
                     "travel_to_kitchen_min", "hub_distance_km", "eta", "rationale",
+                    "items", "complexity",
                 ) if k in payload},
             })
             if len(out) >= limit:

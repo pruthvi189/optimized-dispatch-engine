@@ -106,9 +106,9 @@ def test_encoder_roundtrip(sample_orders):
 
     df = pd.DataFrame(sample_orders)
     encoder = fit_encoder(df)
-    X_cat = encoder.transform(df[["order_complexity", "weather_severity", "traffic_severity", "kitchen_id"]])
-    assert X_cat.shape == (20, 4)
-    assert len(encoder.categories_) == 4
+    X_cat = encoder.transform(df[["order_complexity", "weather_severity", "kitchen_id"]])
+    assert X_cat.shape == (20, 3)
+    assert len(encoder.categories_) == 3
 
 
 def test_make_features_shapes(sample_orders):
@@ -117,7 +117,7 @@ def test_make_features_shapes(sample_orders):
     df = pd.DataFrame(sample_orders)
     encoder = fit_encoder(df)
     X, y = make_features(df, encoder)
-    assert X.shape == (20, 9)
+    assert X.shape == (20, 8)
     assert y.shape == (20,)
 
 
@@ -134,7 +134,6 @@ def test_build_feature_vector_matches_training_shape(sample_orders):
         hour_of_day=12,
         order_complexity="standard",
         weather_severity="clear",
-        traffic_severity="normal",
         kitchen_id=1,
     )
     X_train, _ = make_features(df, encoder)
@@ -154,7 +153,6 @@ def test_unknown_category_handled(sample_orders):
         hour_of_day=12,
         order_complexity="complex",
         weather_severity="rain",
-        traffic_severity="normal",
         kitchen_id=99,
     )
-    assert X_row.shape == (1, 9)
+    assert X_row.shape == (1, 8)

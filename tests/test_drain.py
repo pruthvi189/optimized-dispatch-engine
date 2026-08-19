@@ -19,7 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PREDICTOR_DIR = os.path.join(ROOT, "artifacts")
 
 
-def _config(policy="immediate", days=1, drain_timeout=240, demand_multiplier=1.0):
+def _config(policy="immediate", days=1, drain_timeout=480, demand_multiplier=1.0):
     config = load_scenario("normal", seed=42)
     config["days"] = days
     config["drain_timeout_min"] = drain_timeout
@@ -87,7 +87,7 @@ def test_safety_timeout_marks_finished_with_inflight(tmp_path):
 def test_inflight_order_is_drained(tmp_path):
     """A single order placed near the end of the day, still in flight at the
     generation cutoff, must be completed by the drain."""
-    config = _config(demand_multiplier=0.0, drain_timeout=240)
+    config = _config(demand_multiplier=0.0, drain_timeout=480)
     # Disable cancellations so the order cannot be lost.
     config["cancellation_rates"]["customer_cancel_per_min"] = 0.0
     config["cancellation_rates"]["kitchen_failure_per_min"] = 0.0

@@ -1,0 +1,446 @@
+{
+  "_metadata": {
+    "description": "Bangalore calibration data derived from real Zomato/Courier dataset",
+    "source": "data/external/bangalore_orders.csv",
+    "rows": 2956,
+    "unique_dates": 36,
+    "unique_riders": 60,
+    "date_range": "01-03-2022 to 31-03-2022"
+  },
+  "calibrated_distributions": {
+    "demand_curve": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3.8,
+      3.6,
+      4.1,
+      2.9,
+      1.6,
+      1.6,
+      1.4,
+      1.6,
+      1.5,
+      7.8,
+      7.8,
+      9.4,
+      7.5,
+      8.5,
+      8.8,
+      7.4
+    ],
+    "distance": {
+      "count": 2956,
+      "mean": 9.71,
+      "std": 5.59,
+      "median": 9.32,
+      "p10": 3.11,
+      "p25": 4.66,
+      "p75": 13.97,
+      "p90": 17.08,
+      "min": 1.55,
+      "max": 20.18
+    },
+    "delivery_times": {
+      "by_weather": {
+        "Cloudy": {
+          "count": 487,
+          "mean": 28.71,
+          "std": 9.59,
+          "median": 28.0,
+          "p10": 16.0,
+          "p25": 20.0,
+          "p75": 36.0,
+          "p90": 42.0,
+          "min": 10.0,
+          "max": 51.0
+        },
+        "Fog": {
+          "count": 494,
+          "mean": 28.45,
+          "std": 10.13,
+          "median": 28.0,
+          "p10": 15.0,
+          "p25": 19.2,
+          "p75": 37.0,
+          "p90": 42.7,
+          "min": 10.0,
+          "max": 54.0
+        },
+        "Sandstorms": {
+          "count": 503,
+          "mean": 26.31,
+          "std": 8.57,
+          "median": 26.0,
+          "p10": 15.2,
+          "p25": 21.0,
+          "p75": 31.0,
+          "p90": 38.0,
+          "min": 10.0,
+          "max": 53.0
+        },
+        "Stormy": {
+          "count": 489,
+          "mean": 26.03,
+          "std": 8.25,
+          "median": 26.0,
+          "p10": 16.0,
+          "p25": 20.0,
+          "p75": 31.0,
+          "p90": 38.0,
+          "min": 10.0,
+          "max": 49.0
+        },
+        "Sunny": {
+          "count": 477,
+          "mean": 22.26,
+          "std": 7.82,
+          "median": 21.0,
+          "p10": 13.0,
+          "p25": 17.0,
+          "p75": 26.0,
+          "p90": 33.0,
+          "min": 10.0,
+          "max": 54.0
+        },
+        "Windy": {
+          "count": 506,
+          "mean": 25.99,
+          "std": 8.73,
+          "median": 26.0,
+          "p10": 15.0,
+          "p25": 19.2,
+          "p75": 31.0,
+          "p90": 38.0,
+          "min": 10.0,
+          "max": 52.0
+        }
+      },
+      "by_traffic": {
+        "High": {
+          "count": 280,
+          "mean": 27.62,
+          "std": 8.27,
+          "median": 28.0,
+          "p10": 16.0,
+          "p25": 22.0,
+          "p75": 33.0,
+          "p90": 37.1,
+          "min": 10.0,
+          "max": 54.0
+        },
+        "Jam": {
+          "count": 932,
+          "mean": 30.86,
+          "std": 9.7,
+          "median": 31.0,
+          "p10": 18.0,
+          "p25": 24.0,
+          "p75": 38.0,
+          "p90": 44.0,
+          "min": 10.0,
+          "max": 54.0
+        },
+        "Low": {
+          "count": 1038,
+          "mean": 21.66,
+          "std": 6.75,
+          "median": 21.0,
+          "p10": 14.0,
+          "p25": 17.0,
+          "p75": 26.0,
+          "p90": 30.0,
+          "min": 10.0,
+          "max": 44.0
+        },
+        "Medium": {
+          "count": 706,
+          "mean": 26.62,
+          "std": 8.4,
+          "median": 26.0,
+          "p10": 16.0,
+          "p25": 20.0,
+          "p75": 33.0,
+          "p90": 38.0,
+          "min": 10.0,
+          "max": 49.0
+        }
+      },
+      "by_order_type": {
+        "Buffet": {
+          "count": 691,
+          "mean": 26.45,
+          "std": 9.46,
+          "median": 26.0,
+          "p10": 15.0,
+          "p25": 19.0,
+          "p75": 32.0,
+          "p90": 41.0,
+          "min": 10.0,
+          "max": 53.0
+        },
+        "Drinks": {
+          "count": 747,
+          "mean": 26.18,
+          "std": 9.16,
+          "median": 25.0,
+          "p10": 15.0,
+          "p25": 19.0,
+          "p75": 32.5,
+          "p90": 39.0,
+          "min": 10.0,
+          "max": 54.0
+        },
+        "Meal": {
+          "count": 764,
+          "mean": 26.81,
+          "std": 9.14,
+          "median": 26.0,
+          "p10": 15.0,
+          "p25": 20.0,
+          "p75": 33.0,
+          "p90": 40.0,
+          "min": 10.0,
+          "max": 54.0
+        },
+        "Snack": {
+          "count": 754,
+          "mean": 25.8,
+          "std": 8.74,
+          "median": 25.0,
+          "p10": 15.0,
+          "p25": 19.0,
+          "p75": 32.0,
+          "p90": 38.0,
+          "min": 10.0,
+          "max": 53.0
+        }
+      },
+      "by_vehicle": {
+        "electric_scooter": {
+          "count": 220,
+          "mean": 24.65,
+          "std": 8.04,
+          "median": 25.0,
+          "p10": 15.0,
+          "p25": 18.0,
+          "p75": 30.0,
+          "p90": 37.0,
+          "min": 10.0,
+          "max": 44.0
+        },
+        "motorcycle": {
+          "count": 1745,
+          "mean": 27.6,
+          "std": 9.39,
+          "median": 26.0,
+          "p10": 16.0,
+          "p25": 21.0,
+          "p75": 34.0,
+          "p90": 41.0,
+          "min": 10.0,
+          "max": 54.0
+        },
+        "scooter": {
+          "count": 991,
+          "mean": 24.41,
+          "std": 8.47,
+          "median": 24.0,
+          "p10": 15.0,
+          "p25": 17.0,
+          "p75": 30.0,
+          "p90": 36.0,
+          "min": 10.0,
+          "max": 49.0
+        }
+      }
+    },
+    "weather_frequency": {
+      "Windy": 0.1712,
+      "Sandstorms": 0.1702,
+      "Fog": 0.1671,
+      "Stormy": 0.1654,
+      "Cloudy": 0.1647,
+      "Sunny": 0.1614
+    },
+    "traffic_frequency": {
+      "Low": 0.3512,
+      "Jam": 0.3153,
+      "Medium": 0.2388,
+      "High": 0.0947
+    },
+    "fleet_mix": {
+      "motorcycle": 0.5903,
+      "scooter": 0.3353,
+      "electric_scooter": 0.0744
+    }
+  },
+  "simulator_comparison": {
+    "demand_curve": {
+      "real": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3.8,
+        3.6,
+        4.1,
+        2.9,
+        1.6,
+        1.6,
+        1.4,
+        1.6,
+        1.5,
+        7.8,
+        7.8,
+        9.4,
+        7.5,
+        8.5,
+        8.8,
+        7.4
+      ],
+      "simulator": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "note": "REAL-DATA-DERIVED: Hourly demand from 36 days of Bangalore orders"
+    },
+    "distance_km": {
+      "real_range": [
+        3.11,
+        17.08
+      ],
+      "simulator_range": [
+        1.0,
+        3.5
+      ],
+      "note": "REAL-DATA-DERIVED: Distance from restaurant to customer (1.6-20.2 km in real data)"
+    },
+    "weather_effect": {
+      "real": {
+        "Cloudy": {
+          "mean_min": 28.71,
+          "factor_vs_sunny": 1.29
+        },
+        "Fog": {
+          "mean_min": 28.45,
+          "factor_vs_sunny": 1.278
+        },
+        "Sandstorms": {
+          "mean_min": 26.31,
+          "factor_vs_sunny": 1.182
+        },
+        "Stormy": {
+          "mean_min": 26.03,
+          "factor_vs_sunny": 1.169
+        },
+        "Sunny": {
+          "mean_min": 22.26,
+          "factor_vs_sunny": 1.0
+        },
+        "Windy": {
+          "mean_min": 25.99,
+          "factor_vs_sunny": 1.168
+        }
+      },
+      "simulator_prep_factor": {
+        "clear": 1.0,
+        "rain": 1.1,
+        "storm": 1.2
+      },
+      "note": "REAL-DATA-DERIVED: Delivery time deltas from real Bangalore weather conditions"
+    },
+    "traffic_effect": {
+      "real": {
+        "High": {
+          "mean_min": 27.62,
+          "factor_vs_low": 1.275
+        },
+        "Jam": {
+          "mean_min": 30.86,
+          "factor_vs_low": 1.425
+        },
+        "Low": {
+          "mean_min": 21.66,
+          "factor_vs_low": 1.0
+        },
+        "Medium": {
+          "mean_min": 26.62,
+          "factor_vs_low": 1.229
+        }
+      },
+      "simulator_traffic_factor": {
+        "low": 1.0,
+        "moderate": 1.2,
+        "heavy": 1.55
+      },
+      "note": "REAL-DATA-DERIVED: Delivery time deltas from real Bangalore traffic density"
+    },
+    "fleet_mix": {
+      "real": {
+        "motorcycle": 0.5903,
+        "scooter": 0.3353,
+        "electric_scooter": 0.0744
+      },
+      "simulator": "Not modelled (all riders assumed identical)",
+      "note": "REAL-DATA-DERIVED: 59% motorcycle, 34% scooter, 7% electric"
+    },
+    "festival_effect": {
+      "real": {
+        "No": {
+          "count": 2903,
+          "mean": 25.98
+        },
+        "Yes": {
+          "count": 53,
+          "mean": 44.28
+        }
+      },
+      "simulator": "Not modelled",
+      "note": "REAL-DATA-DERIVED: Festival causes +69% delivery time increase (26 -> 44 min)"
+    }
+  },
+  "remaining_synthetic_assumptions": [
+    "Prep time model (BASE_PREP_RANGES in kitchen.py) - no real prep time data available",
+    "Kitchen workload/staffing dynamics - no real data available",
+    "Kitchen count and staff levels - synthetic parameter",
+    "Rider count and speed - synthetic parameter (22 km/h assumed)",
+    "Cancellation rates - synthetic parameter",
+    "Weather state transitions (Markov chain probabilities) - synthetic parameter",
+    "Traffic spike probability - synthetic parameter",
+    "Rider hub-to-kitchen distance - synthetic parameter",
+    "Pickup time at kitchen - synthetic parameter (0.5 min assumed)",
+    "Order items count distribution - synthetic parameter"
+  ]
+}

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { DistributionData, ExperimentResultsResponse } from "../types";
 
-const PERCENTILES = [50, 90, 95, 99];
+const PERCENTILES: Array<keyof NonNullable<DistributionData["adaptive"]["percentiles"]>> = [50, 90, 95, 99];
 
 function percentileValues(series: DistributionData["adaptive"]): { label: string; value: number }[] {
   const out: { label: string; value: number }[] = [];
@@ -10,14 +10,18 @@ function percentileValues(series: DistributionData["adaptive"]): { label: string
   const edges = series.edges;
   for (const p of PERCENTILES) {
     const q = p / 100;
-    let idx = 0;
+    if (series.percentiles && typeof series.percentiles[p] === "number") {
+      out.push({ label: `P${p}`, value: series.percentiles[p] });
+      continue;
+    }
+    let idx = -1;
     for (let i = 0; i < cdf.length; i++) {
       if (cdf[i] >= q) {
         idx = i;
         break;
       }
     }
-    out.push({ label: `P${p}`, value: edges[idx] ?? 0 });
+    out.push({ label: `P${p}`, value: idx >= 0 ? edges[idx] : NaN });
   }
   return out;
 }
@@ -205,11 +209,11 @@ export function DeliveryDistributionPanel() {
   if (loading) return <div className="panel">Loading distribution data...</div>;
   if (error) return <div className="panel error">Error: {error}</div>;
 
-  const distributions = results?.distributions;
-  const scenarios = results?.scenarios;
+  const distributions = results?.distributions ?? {};
+  const scenarios = results?.scenarios ?? {};
   const multiScenario = Boolean(results?.multi_scenario);
 
-  const hasData = distributions ? Object.keys(distributions).length > 0 : false;
+  const hasData = Object.keys(distributions).length > 0;
 
   return (
     <div className="panel">
@@ -308,18 +312,20 @@ function PercentileBars({ data }: { data: DistributionData }) {
   return (
     <div className="rc-bars">
       {adaptive.map((a, i) => {
-        const im = immediate[i]?.value ?? 0;
-        const winner = a.value <= im ? "adaptive" : "immediate";
-        const span = Math.max(1, a.value, im);
+        const im = immediate[i]?.value ?? NaN;
+        const hasA = Number.isFinite(a.value);
+        const hasIm = Number.isFinite(im);
+        const winner = hasA && hasIm ? (a.value <= im ? "adaptive" : "immediate") : null;
+        const span = Math.max(1, Number.isFinite(a.value) ? a.value : 0, Number.isFinite(im) ? im : 0);
         return (
           <div className="bar-row" key={a.label}>
             <div className="bar-label">{a.label}</div>
             <div className="bar">
-              <div className="bar-fill" style={{ width: `${(a.value / span) * 100}%`, background: "#3b82f6" }} />
-              <div className="bar-fill" style={{ width: `${(im / span) * 100}%`, background: "#f97316", opacity: 0.75 }} />
+              <div className="bar-fill" style={{ width: `${(hasA ? a.value : 0) / span * 100}%`, background: "#3b82f6" }} />
+              <div className="bar-fill" style={{ width: `${(hasIm ? im : 0) / span * 100}%`, background: "#f97316", opacity: 0.75 }} />
             </div>
             <div className="bar-value">
-              {a.value.toFixed(1)} / {im.toFixed(1)} min · {winner}
+              {hasA ? a.value.toFixed(1) : "—"} / {hasIm ? im.toFixed(1) : "—"} min{winner ? ` · ${winner}` : ""}
             </div>
           </div>
         );

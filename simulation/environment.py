@@ -1,17 +1,20 @@
-import simpy
-
 from .entities import WeatherSeverity, TrafficSeverity, WeatherState, TrafficState
 
+# Bangalore-calibrated weather factors (from real delivery time data):
+# Sunny=22.3min (baseline), Stormy/Sandstorms/Windy=26.0-26.3min (+17-18%),
+# Cloudy/Fog=28.4-28.7min (+27-29%).
 WEATHER_FACTORS = {
     WeatherSeverity.CLEAR: 1.0,
-    WeatherSeverity.RAIN: 1.1,
-    WeatherSeverity.STORM: 1.2,
+    WeatherSeverity.RAIN: 1.18,
+    WeatherSeverity.STORM: 1.30,
 }
 
+# Bangalore-calibrated traffic factors (from real delivery time data):
+# Low=21.7min (baseline), Medium=26.6min (+23%), Jam=30.9min (+42%).
 TRAFFIC_FACTORS = {
     TrafficSeverity.LOW: 1.0,
-    TrafficSeverity.MODERATE: 1.2,
-    TrafficSeverity.HEAVY: 1.55,
+    TrafficSeverity.MODERATE: 1.23,
+    TrafficSeverity.HEAVY: 1.42,
 }
 
 # Hour-of-day baseline traffic severity index: 0=low, 1=moderate, 2=heavy.

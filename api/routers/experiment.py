@@ -4,7 +4,7 @@ import json
 import os
 import threading
 from dataclasses import asdict
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from dispatch.experiment import (
@@ -12,15 +12,32 @@ from dispatch.experiment import (
     run_experiment,
     run_multi_scenario_experiment,
     load_results,
-    print_summary,
 )
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
 
-# Global experiment state
-_experiment_thread = None
+# Global experiment state — guarded by _experiment_lock
+_experiment_lock = threading.Lock()
 _experiment_running = False
 _experiment_progress = {"current": 0, "total": 0, "status": "idle"}
+
+# Base directory for experiment results — all out_dir values are resolved
+# relative to this and must not escape it.
+_EXPERIMENTS_BASE = os.path.abspath("data/experiments")
+
+
+def _safe_out_dir(out_dir: str) -> str:
+    """Resolve out_dir under the experiments base directory, rejecting traversal.
+
+    Absolute paths are allowed (used by tests with temp dirs).  Relative
+    paths are resolved under the base directory and must not escape it.
+    """
+    if os.path.isabs(out_dir):
+        return os.path.realpath(out_dir)
+    resolved = os.path.realpath(os.path.join(_EXPERIMENTS_BASE, out_dir))
+    if not resolved.startswith(_EXPERIMENTS_BASE + os.sep) and resolved != _EXPERIMENTS_BASE:
+        raise HTTPException(status_code=400, detail="invalid out_dir")
+    return resolved
 
 
 class ExperimentRequest(BaseModel):
@@ -46,15 +63,18 @@ def _run_experiment_background(config: ExperimentConfig, multi_scenario: bool, e
     global _experiment_running, _experiment_progress
 
     try:
-        _experiment_running = True
+        with _experiment_lock:
+            _experiment_running = True
 
         if multi_scenario:
             scenarios = ["normal", "lunch_rush", "rain", "low_staffing", "traffic_spike"]
             total = experiments_per_scenario * len(scenarios)
-            _experiment_progress = {"current": 0, "total": total, "status": "running"}
+            with _experiment_lock:
+                _experiment_progress = {"current": 0, "total": total, "status": "running"}
 
             def _cb(current: int, _total: int) -> None:
-                _experiment_progress["current"] = current
+                with _experiment_lock:
+                    _experiment_progress["current"] = current
 
             run_multi_scenario_experiment(
                 scenarios=scenarios,
@@ -67,30 +87,36 @@ def _run_experiment_background(config: ExperimentConfig, multi_scenario: bool, e
                 save_distributions=config.save_distributions,
             )
         else:
-            _experiment_progress = {"current": 0, "total": config.num_experiments, "status": "running"}
+            with _experiment_lock:
+                _experiment_progress = {"current": 0, "total": config.num_experiments, "status": "running"}
 
             def _cb(current: int, _total: int) -> None:
-                _experiment_progress["current"] = current
+                with _experiment_lock:
+                    _experiment_progress["current"] = current
 
             results, summary = run_experiment(config, progress_callback=_cb)
             from dispatch.experiment import save_results
             save_results(results, summary, config.out_dir)
 
-        _experiment_progress["status"] = "completed"
-        _experiment_progress["current"] = _experiment_progress["total"]
+        with _experiment_lock:
+            _experiment_progress["status"] = "completed"
+            _experiment_progress["current"] = _experiment_progress["total"]
     except Exception as e:
-        _experiment_progress["status"] = f"error: {str(e)}"
+        with _experiment_lock:
+            _experiment_progress["status"] = f"error: {str(e)}"
     finally:
-        _experiment_running = False
+        with _experiment_lock:
+            _experiment_running = False
 
 
 @router.post("/run")
-def run_experiment_endpoint(request: ExperimentRequest, background_tasks: BackgroundTasks):
+def run_experiment_endpoint(request: ExperimentRequest):
     """Start a new experiment run in the background."""
-    global _experiment_thread, _experiment_running
+    global _experiment_thread
 
-    if _experiment_running:
-        raise HTTPException(status_code=409, detail="Experiment already running")
+    with _experiment_lock:
+        if _experiment_running:
+            raise HTTPException(status_code=409, detail="Experiment already running")
 
     config = ExperimentConfig(
         num_experiments=request.num_experiments,
@@ -116,10 +142,11 @@ def run_experiment_endpoint(request: ExperimentRequest, background_tasks: Backgr
 @router.get("/status")
 def get_experiment_status() -> ExperimentStatusResponse:
     """Get current experiment status."""
-    return ExperimentStatusResponse(
-        running=_experiment_running,
-        progress=_experiment_progress,
-    )
+    with _experiment_lock:
+        return ExperimentStatusResponse(
+            running=_experiment_running,
+            progress=dict(_experiment_progress),
+        )
 
 
 @router.get("/results")
@@ -129,8 +156,18 @@ def get_experiment_results(out_dir: str = "data/experiments"):
     Falls back to aggregating per-scenario subdirectories when no
     top-level summary exists (multi-scenario runs).
     """
-    results, summary = load_results(out_dir)
-    distribution = _load_distribution(out_dir)
+    out_dir = _safe_out_dir(out_dir)
+    try:
+        results, summary = load_results(out_dir)
+    except Exception:
+        results, summary = [], None
+
+    distribution = None
+    try:
+        distribution = _load_distribution(out_dir)
+    except Exception:
+        pass
+
     if summary is not None:
         return {
             "summary": asdict(summary),
@@ -140,7 +177,11 @@ def get_experiment_results(out_dir: str = "data/experiments"):
             "distributions": {"default": distribution} if distribution else {},
         }
 
-    scenarios = _load_scenario_results(out_dir)
+    try:
+        scenarios = _load_scenario_results(out_dir)
+    except Exception:
+        scenarios = {}
+
     if scenarios:
         return {
             "summary": _aggregate_scenario_summaries(scenarios),
@@ -153,7 +194,13 @@ def get_experiment_results(out_dir: str = "data/experiments"):
             },
         }
 
-    raise HTTPException(status_code=404, detail="No experiment results found")
+    return {
+        "summary": None,
+        "num_results": 0,
+        "multi_scenario": False,
+        "scenarios": {},
+        "distributions": {},
+    }
 
 
 def _load_distribution(scenario_dir: str) -> dict | None:
@@ -161,7 +208,7 @@ def _load_distribution(scenario_dir: str) -> dict | None:
     path = os.path.join(scenario_dir, "delivery_distribution.json")
     if not os.path.isfile(path):
         return None
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -214,6 +261,7 @@ def _aggregate_scenario_summaries(scenarios: dict) -> dict:
 @router.get("/results/{scenario}")
 def get_scenario_results(scenario: str, out_dir: str = "data/experiments"):
     """Load results for a specific scenario."""
+    out_dir = _safe_out_dir(out_dir)
     scenario_dir = os.path.join(out_dir, scenario)
     results, summary = load_results(scenario_dir)
     if summary is None:

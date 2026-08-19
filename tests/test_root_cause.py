@@ -13,6 +13,7 @@ from dispatch.root_cause import (
 
 def _make_order(
     placed_at: float = 0.0,
+    entered_kitchen_at: float = 0.0,
     prep_started_at: float = 1.0,
     prep_finished_at: float = 8.0,
     dispatch_at: float = 2.0,
@@ -30,6 +31,7 @@ def _make_order(
         complexity=OrderComplexity.STANDARD,
         distance_km=3.0,
         staff_level=3,
+        entered_kitchen_at=entered_kitchen_at,
         prep_started_at=prep_started_at,
         prep_finished_at=prep_finished_at,
         dispatch_at=dispatch_at,

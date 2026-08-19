@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.baseline import RuleBaseline  # noqa: E402
 from models.features import fit_encoder, make_features, TARGET  # noqa: E402
-from models.features import temporal_three_way_split  # noqa: E402
+from models.features import temporal_three_way_split, temporal_four_way_split  # noqa: E402
 from models.train import train_lightgbm, train_quantile  # noqa: E402
 from models.evaluate import mae, rmse, mape  # noqa: E402
 from models.uncertainty import (  # noqa: E402
@@ -63,7 +63,6 @@ def _sample_features():
         "hour_of_day": 12,
         "order_complexity": "standard",
         "weather_severity": "rain",
-        "traffic_severity": "moderate",
         "kitchen_id": 2,
     }
 
@@ -148,6 +147,26 @@ def test_three_way_split_is_temporal_and_disjoint(toy_data):
     assert set(train["order_id"]).isdisjoint(set(test["order_id"]))
     assert train["placed_at"].max() <= calib["placed_at"].min()
     assert calib["placed_at"].max() <= test["placed_at"].min()
+
+
+def test_four_way_split_is_temporal_and_disjoint(toy_data):
+    """Model selection must happen on validation and calibration on calib —
+    each held out from the other and from the untouched test split."""
+    import pandas as pd
+
+    df = pd.DataFrame(toy_data)
+    train, val, calib, test = temporal_four_way_split(df)
+    assert len(train) + len(val) + len(calib) + len(test) == len(df)
+    assert set(train["order_id"]).isdisjoint(set(val["order_id"]))
+    assert set(train["order_id"]).isdisjoint(set(calib["order_id"]))
+    assert set(train["order_id"]).isdisjoint(set(test["order_id"]))
+    assert set(val["order_id"]).isdisjoint(set(calib["order_id"]))
+    assert set(val["order_id"]).isdisjoint(set(test["order_id"]))
+    assert set(calib["order_id"]).isdisjoint(set(test["order_id"]))
+    assert train["placed_at"].max() <= val["placed_at"].min()
+    assert val["placed_at"].max() <= calib["placed_at"].min()
+    assert calib["placed_at"].max() <= test["placed_at"].min()
+    assert len(val) > 0 and len(calib) > 0
 
 
 def test_predictor_contract(toy_data, tmp_path):

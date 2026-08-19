@@ -16,14 +16,12 @@ from typing import Literal
 import numpy as np
 
 from simulation import SimulationEngine, load_scenario
-from dispatch.metrics import compute_metrics, format_metrics
+from dispatch.metrics import compute_metrics
 from dispatch.statistics import (
-    PairedDiffStats,
     METRIC_DIRECTIONS,
     paired_difference_stats,
     wilson_ci,
 )
-from dispatch.root_cause import analyze_orders, aggregate_root_causes
 
 
 ScenarioType = Literal["normal", "lunch_rush", "rain", "low_staffing", "traffic_spike"]
@@ -112,29 +110,65 @@ class ExperimentSummary:
 
 class DistributionAccumulator:
     """Incrementally aggregates per-order delivery-time histograms for both
-    policies across paired runs, without retaining per-order arrays."""
+    policies across paired runs.
 
-    def __init__(self, bin_min: float = 1.0, max_min: float = 60.0):
+    Raw delivery times are retained (not just histogram bins) so that true
+    pooled percentiles can be emitted for the dashboard; the histogram cap
+    (``max_min``) only affects the binned charts, never the percentiles.
+    """
+
+    def __init__(self, bin_min: float = 1.0, max_min: float = 240.0):
+        self.bin_min = bin_min
         self.max_min = max_min
         self.edges = np.arange(0.0, max_min + bin_min, bin_min)
         self.adaptive_counts = np.zeros(len(self.edges) - 1, dtype=np.int64)
         self.immediate_counts = np.zeros(len(self.edges) - 1, dtype=np.int64)
+        self.adaptive_times: list[float] = []
+        self.immediate_times: list[float] = []
         self.adaptive_total = 0
         self.immediate_total = 0
         self.adaptive_delivery_sum = 0.0
         self.immediate_delivery_sum = 0.0
         self.num_runs = 0
 
+    def _expand(self, new_max: float):
+        """Expand edges and re-bin existing counts when data exceeds current range."""
+        new_edges = np.arange(0.0, new_max + self.bin_min, self.bin_min)
+        new_adaptive = np.zeros(len(new_edges) - 1, dtype=np.int64)
+        new_immediate = np.zeros(len(new_edges) - 1, dtype=np.int64)
+        if self.adaptive_times:
+            new_adaptive += np.histogram(self.adaptive_times, bins=new_edges)[0]
+        if self.immediate_times:
+            new_immediate += np.histogram(self.immediate_times, bins=new_edges)[0]
+        self.edges = new_edges
+        self.max_min = new_max
+        self.adaptive_counts = new_adaptive
+        self.immediate_counts = new_immediate
+
     def update(self, adaptive_times, immediate_times):
+        # Auto-expand if any delivery time exceeds current range.
+        all_times = list(adaptive_times) + list(immediate_times)
+        if all_times:
+            data_max = max(all_times)
+            if data_max > self.max_min:
+                self._expand(float(np.ceil(data_max / 10.0) * 10 + 10))
         self.adaptive_counts += np.histogram(adaptive_times, bins=self.edges)[0]
         self.immediate_counts += np.histogram(immediate_times, bins=self.edges)[0]
         self.adaptive_total += len(adaptive_times)
         self.immediate_total += len(immediate_times)
         self.adaptive_delivery_sum += sum(adaptive_times)
         self.immediate_delivery_sum += sum(immediate_times)
+        self.adaptive_times.extend(adaptive_times)
+        self.immediate_times.extend(immediate_times)
         self.num_runs += 1
 
-    def _series(self, counts, total, delivery_sum):
+    def _percentiles(self, times) -> dict[int, float]:
+        if not times:
+            return {50: 0.0, 90: 0.0, 95: 0.0, 99: 0.0}
+        values = np.percentile(times, [50, 90, 95, 99])
+        return {q: round(float(v), 3) for q, v in zip((50, 90, 95, 99), values)}
+
+    def _series(self, counts, total, delivery_sum, times):
         cdf = np.cumsum(counts).astype(float)
         if total > 0:
             cdf /= total
@@ -144,6 +178,7 @@ class DistributionAccumulator:
             "cdf": [round(x, 5) for x in cdf.tolist()],
             "total_orders": int(total),
             "avg_delivery_min": round(delivery_sum / total, 3) if total else 0.0,
+            "percentiles": self._percentiles(times),
         }
 
     def to_dict(self, scenario: str) -> dict:
@@ -151,8 +186,8 @@ class DistributionAccumulator:
             "scenario": scenario,
             "num_paired_runs": self.num_runs,
             "max_min": self.max_min,
-            "adaptive": self._series(self.adaptive_counts, self.adaptive_total, self.adaptive_delivery_sum),
-            "immediate": self._series(self.immediate_counts, self.immediate_total, self.immediate_delivery_sum),
+            "adaptive": self._series(self.adaptive_counts, self.adaptive_total, self.adaptive_delivery_sum, self.adaptive_times),
+            "immediate": self._series(self.immediate_counts, self.immediate_total, self.immediate_delivery_sum, self.immediate_times),
         }
 
 
@@ -162,12 +197,6 @@ def _run_single_simulation(config: dict, out_dir: str, scenario_name: str, save_
     engine.run()
     metrics = compute_metrics(engine.orders, engine.riders.riders, engine.env.now, config)
     return engine, metrics
-
-
-def run_single_simulation(config: dict, out_dir: str, scenario_name: str, save_outputs: bool = False) -> dict:
-    """Run a single simulation and return metrics."""
-    _, metrics = _run_single_simulation(config, out_dir, scenario_name, save_outputs)
-    return metrics
 
 
 def run_paired_experiment(
@@ -575,14 +604,14 @@ def print_summary(summary: ExperimentSummary):
     print("=" * 70)
     print(f"\nWIN CRITERION: average end-to-end delivery time (min) "
           f"(tie unless |diff| > {DELIVERY_WIN_THRESHOLD:.2f} min)")
-    print(f"\nWIN COUNTS:")
+    print("\nWIN COUNTS:")
     print(f"  Adaptive wins:  {summary.adaptive_wins}")
     print(f"  Immediate wins: {summary.immediate_wins}")
     print(f"  Ties:           {summary.ties}")
     print(f"  Adaptive win rate: {summary.adaptive_win_rate*100:.1f}% "
           f"(95% CI {summary.adaptive_win_rate_ci_low*100:.1f}% - {summary.adaptive_win_rate_ci_high*100:.1f}%)")
 
-    print(f"\nMETRIC DIFFERENCES (Adaptive - Immediate):")
+    print("\nMETRIC DIFFERENCES (Adaptive - Immediate):")
     print(f"  {'Metric':<40} {'Mean':>10} {'Median':>10} {'Std':>10}")
     print(f"  {'-'*70}")
     print(f"  {'On-time % (pp)':<40} {summary.on_time_pct_diff_mean*100:>10.2f} {summary.on_time_pct_diff_median*100:>10.2f} {summary.on_time_pct_diff_std*100:>10.2f}")
@@ -597,10 +626,10 @@ def print_summary(summary: ExperimentSummary):
     print(f"  {'Avg order wait (min)':<40} {summary.avg_order_wait_min_diff_mean:>10.3f}")
     print(f"  {'Avg rider kitchen wait (min)':<40} {summary.avg_rider_wait_kitchen_min_diff_mean:>10.3f} {summary.avg_rider_wait_kitchen_min_diff_median:>10.3f}")
 
-    print(f"\nNOTE: Negative values mean Adaptive is better (lower is better for all metrics "
+    print("\nNOTE: Negative values mean Adaptive is better (lower is better for all metrics "
           "except on-time %)")
-    print(f"      Positive on-time % means Adaptive has higher on-time rate")
-    print(f"      Cost score differences are reported for transparency only; wins use delivery time.")
+    print("      Positive on-time % means Adaptive has higher on-time rate")
+    print("      Cost score differences are reported for transparency only; wins use delivery time.")
 
     print(f"\nPAIRED STATISTICS (method: {summary.paired_stats[next(iter(summary.paired_stats))]['method'] if summary.paired_stats else 'n/a'})")
     print(f"  {'Metric':<32} {'Mean':>9} {'95% CI':>22} {'p(perm)':>9} {'p(t)':>9} {'d_z':>7} {'sig':>4}")

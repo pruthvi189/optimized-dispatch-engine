@@ -264,18 +264,21 @@ def test_distribution_accumulator_to_dict_contract():
     assert set(d.keys()) == {"scenario", "num_paired_runs", "max_min", "adaptive", "immediate"}
     assert d["scenario"] == "normal"
     assert d["num_paired_runs"] == 2
-    assert d["max_min"] == 60.0
+    assert d["max_min"] == 240.0
 
     for series in (d["adaptive"], d["immediate"]):
-        assert set(series.keys()) == {"bin_counts", "edges", "cdf", "total_orders", "avg_delivery_min"}
-        assert len(series["bin_counts"]) == 60
-        assert len(series["edges"]) == 61
-        assert len(series["cdf"]) == 60
+        assert set(series.keys()) == {"bin_counts", "edges", "cdf", "total_orders", "avg_delivery_min", "percentiles"}
+        assert len(series["bin_counts"]) == 240
+        assert len(series["edges"]) == 241
+        assert len(series["cdf"]) == 240
         assert isinstance(series["total_orders"], int)
         assert series["avg_delivery_min"] >= 0.0
         # CDF is monotonically non-decreasing and reaches 1.0
         assert all(b >= a for a, b in zip(series["cdf"], series["cdf"][1:]))
         assert series["cdf"][-1] == pytest.approx(1.0)
+        # Percentiles are real numbers within the delivery-time range
+        assert {str(k) for k in series["percentiles"].keys()} == {"50", "90", "95", "99"}
+        assert all(0.0 <= pct <= 600.0 for pct in series["percentiles"].values())
 
 
 def test_run_experiment_saves_distribution_contract(temp_dir):
@@ -304,10 +307,12 @@ def test_run_experiment_saves_distribution_contract(temp_dir):
     assert d["scenario"] == "normal"
     assert d["num_paired_runs"] == 1
     for series in (d["adaptive"], d["immediate"]):
-        assert set(series.keys()) == {"bin_counts", "edges", "cdf", "total_orders", "avg_delivery_min"}
+        assert set(series.keys()) == {"bin_counts", "edges", "cdf", "total_orders", "avg_delivery_min", "percentiles"}
         assert len(series["bin_counts"]) == len(series["edges"]) - 1 == len(series["cdf"])
         assert series["total_orders"] > 0
         assert series["cdf"][-1] == pytest.approx(1.0)
+        assert {str(k) for k in series["percentiles"].keys()} == {"50", "90", "95", "99"}
+        assert all(0.0 <= pct <= 600.0 for pct in series["percentiles"].values())
 
 
 def test_experiment_results_distributions_wrapper(temp_dir):
@@ -322,10 +327,12 @@ def test_experiment_results_distributions_wrapper(temp_dir):
     app.include_router(router)
     client = TestClient(app)
 
-    # Empty dir -> no results -> 404
+    # Empty dir -> no results -> 200 with empty data (graceful)
     empty = os.path.join(temp_dir, "empty")
     os.makedirs(empty)
-    assert client.get(f"/experiments/results?out_dir={empty}").status_code == 404
+    resp = client.get(f"/experiments/results?out_dir={empty}")
+    assert resp.status_code == 200
+    assert resp.json()["num_results"] == 0
 
     # Single-scenario: summary + delivery_distribution.json -> wrapped under "default"
     config = ExperimentConfig(

@@ -3,8 +3,8 @@ import { api } from "./api";
 import type { Metrics, RunnerConfig } from "./types";
 
 export interface CompareState {
-  immediate: Metrics | null;
-  adaptive: Metrics | null;
+  baseline: Metrics | null;
+  optimized: Metrics | null;
   running: boolean;
   error: string | null;
 }
@@ -12,14 +12,14 @@ export interface CompareState {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Runs immediate then adaptive to completion on the same (scenario, seed, days)
- * at max speed, and returns each policy's final metrics. Uses only the Phase 4
- * REST API. Cancel abandons the current step.
+ * Runs baseline (nearest_heuristic) then optimized (joint_optimizer) to
+ * completion on the same (scenario, seed, days) at max speed, and returns
+ * each policy's final metrics.
  */
 export function useCompare(cfg: RunnerConfig) {
   const [state, setState] = useState<CompareState>({
-    immediate: null,
-    adaptive: null,
+    baseline: null,
+    optimized: null,
     running: false,
     error: null,
   });
@@ -34,13 +34,12 @@ export function useCompare(cfg: RunnerConfig) {
 
   const run = useCallback(async () => {
     runningRef.current = true;
-    setState({ immediate: null, adaptive: null, running: true, error: null });
+    setState({ baseline: null, optimized: null, running: true, error: null });
     try {
       const results: Metrics[] = [];
-      // Longer runs need a bigger poll budget: 100ms per tick, scaled by days.
       const days = cfgRef.current.days;
       const maxIters = Math.max(600, days * 300);
-      for (const policy of ["immediate", "adaptive"] as const) {
+      for (const policy of ["nearest_heuristic", "joint_optimizer"] as const) {
         if (!runningRef.current) return;
         const base = { ...cfgRef.current, policy, speed: null };
         await api.reset(base);
@@ -62,9 +61,8 @@ export function useCompare(cfg: RunnerConfig) {
             "neither policy finished. Increase the poll budget or check the backend runner.",
         );
       }
-      // Restore the runner to the user's config so the live UI stream re-syncs.
       await api.reset(cfgRef.current).catch(() => {});
-      setState({ immediate: results[0], adaptive: results[1], running: false, error: null });
+      setState({ baseline: results[0], optimized: results[1], running: false, error: null });
     } catch (err) {
       setState((s) => ({ ...s, running: false, error: String((err as Error).message ?? err) }));
     } finally {
@@ -72,7 +70,6 @@ export function useCompare(cfg: RunnerConfig) {
     }
   }, []);
 
-  // abort on unmount
   useEffect(() => () => { runningRef.current = false; }, []);
 
   return { state, run, cancel };

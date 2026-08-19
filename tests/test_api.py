@@ -39,7 +39,7 @@ def test_status_before_start():
         s = c.get("/sim/status").json()
     assert s["sim_time_min"] == 0.0
     assert s["scenario"] == "normal"
-    assert s["policy"] == "adaptive"
+    assert s["policy"] == "nearest_heuristic"
     assert SNAPSHOT_KEYS.issubset(s.keys())
 
 
@@ -82,7 +82,6 @@ def test_prediction_returns_interval():
             "hour_of_day": 12,
             "order_complexity": "standard",
             "weather_severity": "clear",
-            "traffic_severity": "low",
             "kitchen_id": 1,
         })
     assert r.status_code == 200
@@ -105,7 +104,7 @@ def test_dispatch_decision_offline():
         })
     assert r.status_code == 200
     body = r.json()
-    assert body["policy"] == "adaptive"
+    assert body["policy"] == "nearest_heuristic"
     assert body["dispatch_at"] is not None
     assert body["eta"] > 0
     assert "rationale" in body

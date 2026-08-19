@@ -1,0 +1,28 @@
+{
+  "model": "lightgbm",
+  "target": "delivery_time_min",
+  "features": [
+    "distance_km",
+    "hour_sin",
+    "hour_cos",
+    "order_complexity",
+    "weather_severity",
+    "traffic_severity"
+  ],
+  "numeric_features": [
+    "distance_km",
+    "hour_sin",
+    "hour_cos"
+  ],
+  "categorical_features": [
+    "order_complexity",
+    "weather_severity",
+    "traffic_severity"
+  ],
+  "calibration_method": "split_conformal",
+  "calibration_quantile": 9.580360740331075,
+  "nominal_coverage": 0.8,
+  "train_std_min": 9.189030167225217,
+  "data_source": "real_bangalore_zomato",
+  "created": "phase2_real_data"
+}

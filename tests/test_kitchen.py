@@ -2,6 +2,7 @@ import sys
 import os
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -69,3 +70,45 @@ def test_low_staffing_increases_prep():
     a = [sample_prep_time(rng, _order(OrderComplexity.SIMPLE, 1, 0), well_staffed, weather, traffic, config) for _ in range(100)]
     b = [sample_prep_time(rng, _order(OrderComplexity.SIMPLE, 1, 0), under_staffed, weather, traffic, config) for _ in range(100)]
     assert sum(b) / len(b) > sum(a) / len(a)
+
+
+def _contention_config():
+    from simulation.scenarios import load_scenario
+
+    config = load_scenario("normal", seed=7)
+    config["days"] = 1
+    config["dispatch"]["enabled"] = True
+    config["dispatch"]["default_policy"] = "immediate"
+    config["drain_timeout_min"] = 300
+    config["cancellation_rates"]["customer_cancel_per_min"] = 0.0
+    config["cancellation_rates"]["kitchen_failure_per_min"] = 0.0
+    # One prep slot per kitchen -> forced queueing under load.
+    config["kitchens"]["staff_level"] = 1
+    config["kitchens"]["count"] = 1
+    return config
+
+
+def test_prep_timestamps_separate_queue_from_prep(tmp_path):
+    """prep_started_at must be set only after the resource is acquired, so
+    kitchen_queue (prep_started_at - entered_kitchen_at) is pure queue time."""
+    from simulation import SimulationEngine
+    from simulation.entities import OrderStatus
+
+    config = _contention_config()
+    engine = SimulationEngine(config, out_dir=str(tmp_path / "k"), scenario_name="normal")
+    engine.run()
+
+    completed = [o for o in engine.orders if o.status == OrderStatus.COMPLETED]
+    assert len(completed) > 1, "expected a non-trivial set of completed orders"
+
+    for o in completed:
+        assert o.entered_kitchen_at is not None
+        assert o.prep_started_at is not None
+        assert o.prep_finished_at is not None
+        # Prep starts no earlier than queue entry.
+        assert o.prep_started_at >= o.entered_kitchen_at
+        # Actual prep duration equals the measured prep window exactly.
+        assert o.prep_finished_at - o.prep_started_at == pytest.approx(o.actual_prep_duration_min, abs=1e-9)
+
+    # With a single prep slot, at least one order must have queued.
+    assert any(o.prep_started_at > o.entered_kitchen_at for o in completed)

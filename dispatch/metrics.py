@@ -54,7 +54,7 @@ def compute_metrics(orders, riders, sim_length, config):
     def pct(p):
         return round(float(np.percentile(delivery_times, p)), 3) if delivery_times else 0.0
 
-    return {
+    result = {
         "orders_placed": len(orders),
         "orders_completed": len(delivered),
         "orders_cancelled": len(cancelled),
@@ -74,8 +74,45 @@ def compute_metrics(orders, riders, sim_length, config):
         "orders_in_flight": max(0, len(orders) - len(delivered) - len(cancelled)),
     }
 
+    # Kitchen selection metrics (Phase 9).
+    selected_distances = [o.selected_kitchen_distance for o in delivered
+                          if o.selected_kitchen_distance is not None]
+    if selected_distances:
+        result["avg_selected_kitchen_distance_km"] = round(
+            sum(selected_distances) / len(selected_distances), 3
+        )
+        result["min_selected_kitchen_distance_km"] = round(min(selected_distances), 3)
+        result["max_selected_kitchen_distance_km"] = round(max(selected_distances), 3)
+
+    # Kitchen load distribution (orders per kitchen, for delivered orders).
+    kitchen_counts = {}
+    for o in delivered:
+        kid = o.kitchen_id
+        if kid is not None:
+            kitchen_counts[kid] = kitchen_counts.get(kid, 0) + 1
+    if kitchen_counts:
+        counts = list(kitchen_counts.values())
+        result["orders_per_kitchen"] = {int(k): int(v) for k, v in sorted(kitchen_counts.items())}
+        result["kitchen_load_std"] = round(float(np.std(counts)), 3)
+
+    # Rider assignment metrics (Phase 10 — joint optimization).
+    assigned_rider_ids = [o.rider_id for o in delivered if o.rider_id is not None]
+    if assigned_rider_ids:
+        from collections import Counter
+        rider_counts = Counter(assigned_rider_ids)
+        result["orders_per_rider"] = {int(k): int(v) for k, v in sorted(rider_counts.items())}
+        result["rider_load_std"] = round(float(np.std(list(rider_counts.values()))), 3)
+
+    return result
+
 
 def format_metrics(m: dict) -> str:
+    kitchen_info = ""
+    if "avg_selected_kitchen_distance_km" in m:
+        kitchen_info = (
+            f" avg_kitchen_dist={m['avg_selected_kitchen_distance_km']}km"
+            f" kitchen_load_std={m.get('kitchen_load_std', 'N/A')}"
+        )
     return (
         f"placed={m['orders_placed']} completed={m['orders_completed']} "
         f"cancelled={m['orders_cancelled']} on_time={m['on_time_rate']:.1%} "
@@ -83,4 +120,5 @@ def format_metrics(m: dict) -> str:
         f"late={m.get('late_count', 0)} wait={m['avg_order_wait_min']}min "
         f"rider_kitchen_wait={m['avg_rider_wait_kitchen_min']}min "
         f"rider_idle={m['avg_rider_idle_min']}min cost={m['cost_score']}"
+        f"{kitchen_info}"
     )

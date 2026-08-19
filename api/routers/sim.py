@@ -39,36 +39,51 @@ def _apply_config(request, body: RunnerConfigIn):
     return runner
 
 
+def _publish(request, runner):
+    hub = request.app.state.hub
+    if hub is not None:
+        hub.publish(runner.status())
+
+
 @router.post("/start")
 def start(request: Request):
-    request.app.state.runner.start()
-    return request.app.state.runner.status()
+    runner = request.app.state.runner
+    runner.start()
+    _publish(request, runner)
+    return runner.status()
 
 
 @router.post("/pause")
 def pause(request: Request):
-    request.app.state.runner.pause()
-    return request.app.state.runner.status()
+    runner = request.app.state.runner
+    runner.pause()
+    _publish(request, runner)
+    return runner.status()
 
 
 @router.post("/resume")
 def resume(request: Request):
-    request.app.state.runner.start()
-    return request.app.state.runner.status()
+    runner = request.app.state.runner
+    runner.start()
+    _publish(request, runner)
+    return runner.status()
 
 
 @router.post("/step")
 def step(body: StepIn, request: Request):
+    runner = request.app.state.runner
     try:
-        request.app.state.runner.step(body.minutes)
+        runner.step(body.minutes)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return request.app.state.runner.status()
+    _publish(request, runner)
+    return runner.status()
 
 
 @router.post("/reset")
 def reset(body: RunnerConfigIn, request: Request):
     _apply_config(request, body)
+    _publish(request, request.app.state.runner)
     return request.app.state.runner.status()
 
 

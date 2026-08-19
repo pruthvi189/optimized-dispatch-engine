@@ -5,14 +5,13 @@ from sklearn.preprocessing import OrdinalEncoder
 TARGET = "actual_prep_duration_min"
 KEEP_STATUS = ("ready", "completed")
 
-CATEGORICAL_FEATURES = ["order_complexity", "weather_severity", "traffic_severity", "kitchen_id"]
+CATEGORICAL_FEATURES = ["order_complexity", "weather_severity", "kitchen_id"]
 NUMERIC_FEATURES = ["items_count", "workload_at_placement", "staff_level", "hour_sin", "hour_cos"]
 ALL_FEATURES = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
 VALID_KITCHEN_IDS = [1, 2, 3]
 VALID_COMPLEXITY = ["simple", "standard", "complex"]
 VALID_WEATHER = ["clear", "rain", "storm"]
-VALID_TRAFFIC = ["low", "moderate", "heavy"]
 
 
 def pool_orders(csv_paths):
@@ -49,7 +48,7 @@ def add_cyclical_hour(df):
 def fit_encoder(df):
     enc = OrdinalEncoder(
         categories=[
-            VALID_COMPLEXITY, VALID_WEATHER, VALID_TRAFFIC, [str(k) for k in VALID_KITCHEN_IDS]
+            VALID_COMPLEXITY, VALID_WEATHER, [str(k) for k in VALID_KITCHEN_IDS]
         ],
         dtype=int,
         handle_unknown="use_encoded_value",
@@ -73,8 +72,13 @@ def make_X(df, encoder):
 
 
 def build_feature_vector(encoder, items_count, workload, staff_level, hour_of_day,
-                         order_complexity, weather_severity, traffic_severity, kitchen_id):
-    """Build a single-row model input matching the training feature order."""
+                         order_complexity, weather_severity, kitchen_id):
+    """Build a single-row model input matching the training feature order.
+
+    traffic_severity is deliberately NOT a prep-model feature: the prep-time
+    simulator draws prep duration from weather/workload/staffing only, so
+    including traffic would ask the model to learn signal that does not exist.
+    """
     row = {
         "items_count": items_count,
         "workload_at_placement": workload,
@@ -82,7 +86,6 @@ def build_feature_vector(encoder, items_count, workload, staff_level, hour_of_da
         "hour_of_day": int(hour_of_day),
         "order_complexity": order_complexity,
         "weather_severity": weather_severity,
-        "traffic_severity": traffic_severity,
         "kitchen_id": int(kitchen_id),
     }
     df = pd.DataFrame([row])
@@ -117,3 +120,25 @@ def temporal_three_way_split(df, train_frac=0.7, calib_frac=0.15):
     assert train["placed_at"].max() <= calib["placed_at"].min(), "temporal leakage train->calib"
     assert calib["placed_at"].max() <= test["placed_at"].min(), "temporal leakage calib->test"
     return train, calib, test
+
+
+def temporal_four_way_split(df, train_frac=0.6, val_frac=0.15, calib_frac=0.15):
+    """Strictly time-ordered train/validation/calibration/test split.
+
+    Model selection happens on the validation split and conformal calibration
+    on the calibration split, so neither selection nor calibration is tuned on
+    the test set. The test split stays untouched for the final evaluation.
+    """
+    df = df.sort_values("placed_at").reset_index(drop=True)
+    n = len(df)
+    train_cut = int(n * train_frac)
+    val_cut = train_cut + int(n * val_frac)
+    calib_cut = val_cut + int(n * calib_frac)
+    train = df.iloc[:train_cut].copy()
+    val = df.iloc[train_cut:val_cut].copy()
+    calib = df.iloc[val_cut:calib_cut].copy()
+    test = df.iloc[calib_cut:].copy()
+    assert train["placed_at"].max() <= val["placed_at"].min(), "temporal leakage train->val"
+    assert val["placed_at"].max() <= calib["placed_at"].min(), "temporal leakage val->calib"
+    assert calib["placed_at"].max() <= test["placed_at"].min(), "temporal leakage calib->test"
+    return train, val, calib, test

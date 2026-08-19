@@ -1,5 +1,3 @@
-import simpy
-
 from .entities import Order, OrderStatus
 
 

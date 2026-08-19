@@ -1,6 +1,5 @@
 import argparse
 import os
-import tempfile
 
 from simulation import SimulationEngine, load_scenario
 from dispatch.metrics import format_metrics

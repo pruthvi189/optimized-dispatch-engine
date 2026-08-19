@@ -2,14 +2,21 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { RootCausesResponse, RootCauseAnalysis } from "../types";
 
-export function RootCausePanel() {
+export function RootCausePanel({ finished }: { finished: boolean }) {
   const [data, setData] = useState<RootCausesResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<RootCauseAnalysis | null>(null);
 
   useEffect(() => {
+    if (!finished) {
+      setData(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     let mounted = true;
+    setLoading(true);
     async function fetchData() {
       try {
         const res = await api.rootCauses();
@@ -25,8 +32,19 @@ export function RootCausePanel() {
     }
     fetchData();
     return () => { mounted = false; };
-  }, []);
+  }, [finished]);
 
+  if (!finished) {
+    return (
+      <div className="panel">
+        <div className="panel-head">
+          <h3>Root Cause Analysis</h3>
+          <span className="badge">no run yet</span>
+        </div>
+        <p>Run a simulation to see root-cause analysis for late orders.</p>
+      </div>
+    );
+  }
   if (loading) return <div className="panel">Loading root cause analysis...</div>;
   if (error) return <div className="panel error">Error: {error}</div>;
   if (!data) return <div className="panel">No data available</div>;

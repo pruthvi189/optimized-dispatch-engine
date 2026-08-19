@@ -2,10 +2,7 @@
 asyncio event loop, plus a fan-out hub for WebSocket subscribers."""
 
 import asyncio
-import logging
 import queue
-
-logger = logging.getLogger(__name__)
 
 
 class WebSocketHub:

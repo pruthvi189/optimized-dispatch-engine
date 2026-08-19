@@ -26,7 +26,9 @@ cost_weights:
   late: 10
 
 # Customer promise: order delivered within this many minutes of placement.
-promised_delivery_min: 15.0
+# Bangalore-calibrated: mean delivery 26.3 min, P90=39 min; 40-min promise
+# covers ~92% of normal-condition deliveries.
+promised_delivery_min: 40.0
 
 # Rider hub-to-kitchen distance sampled per order (km).
 hub_distance_range_km: [0.5, 2.0]
@@ -37,15 +39,34 @@ pickup_time_min: 0.5
 # Rider unavailable penalty after a rider cancel (minutes), then back to idle.
 penalty_min: 10.0
 
-# Travel speed degradation by severity (multipliers applied to travel time).
+# Bangalore-calibrated weather speed factors for customer leg travel.
+# Stormy/Sandstorms/Windy: +17-18%, Cloudy/Fog: +27-29%.
 weather_speed_factor:
   clear: 1.0
-  rain: 1.15
-  storm: 1.3
-# Travel time multipliers by severity. Calibrated to Bangalore two-wheeler
-# door-to-door delivery: base speed 22 km/h, heavy traffic ~14 km/h (TomTom
-# 2025 congestion index: heavy Bangalore peak traffic runs 1.55x travel time).
+  rain: 1.18
+  storm: 1.30
+# Travel time multipliers by severity. Calibrated to Bangalore real delivery
+# data: Low=21.7min baseline, Medium=26.6min (+23%), Jam=30.9min (+42%).
 traffic_speed_factor:
   low: 1.0
-  moderate: 1.2
-  heavy: 1.55
+  moderate: 1.23
+  heavy: 1.42
+
+# Kitchen selection policy (Phase 9).
+# Weights for the candidate ranking score (lower is better):
+#   score = w_distance * distance_km + w_queue * queue_len + w_staff * (1/staff)
+# These are exposed for transparency; do NOT tune after seeing experiment results.
+kitchen_selection:
+  weight_distance: 1.0
+  weight_queue: 1.5
+  weight_staff: 1.0
+  avg_prep_min: 7.0
+  kitchen_locations:
+    - [-5.1, 5.1]    # Kitchen 1 — northwest
+    - [5.1, -3.7]    # Kitchen 2 — southeast
+    - [-1.5, -6.6]   # Kitchen 3 — south-center
+    - [5.1, 5.1]     # Kitchen 4 — northeast
+
+# Joint kitchen + rider optimization (Phase 10).
+# avg_prep_min is shared with kitchen_selection above.
+# No tunable weights — the optimizer minimizes total delivery time directly.

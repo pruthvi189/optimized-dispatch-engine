@@ -13,6 +13,8 @@ export default defineConfig({
       "/orders": API_TARGET,
       "/prediction": API_TARGET,
       "/dispatch": API_TARGET,
+      "/analysis": API_TARGET,
+      "/experiments": API_TARGET,
     },
   },
   build: {

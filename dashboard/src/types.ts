@@ -59,6 +59,26 @@ export interface RiderState {
   assigned_to: number | null;
 }
 
+export interface KitchenEvaluation {
+  kitchen_id: number;
+  distance_km: number;
+  queue_len: number;
+  staff_level: number;
+  delivery_est_min: number;
+  score?: number;
+  rider_id?: number;
+  rider_to_kitchen_km?: number;
+  kitchen_distance_km?: number;
+  total_est_min?: number;
+}
+
+export interface DecisionInputs {
+  evaluations?: KitchenEvaluation[];
+  selected_kitchen_id?: number;
+  selected_rider_id?: number;
+  [key: string]: unknown;
+}
+
 export interface Decision {
   order_id: number | null;
   policy: string | null;
@@ -70,6 +90,12 @@ export interface Decision {
   risk_buffer_min: number | null;
   travel_to_kitchen_min: number | null;
   rationale: string | null;
+  items: number | null;
+  complexity: string | null;
+  selected_kitchen_id: number | null;
+  selected_rider_id: number | null;
+  selected_kitchen_distance: number | null;
+  inputs: DecisionInputs | null;
 }
 
 export interface EventRow {
@@ -85,6 +111,7 @@ export interface Metrics {
   orders_cancelled: number;
   on_time_rate: number;
   avg_delivery_min: number;
+  p95_delivery_min: number;
   avg_late_min: number;
   avg_order_wait_min: number;
   avg_rider_wait_kitchen_min: number;
@@ -122,38 +149,15 @@ export interface RunnerConfig {
 }
 
 export const SCENARIOS = ["normal", "lunch_rush", "rain", "low_staffing", "traffic_spike"];
-export const POLICIES = ["adaptive", "immediate"];
+export const ALL_POLICIES = ["immediate", "adaptive", "nearest_kitchen", "optimized_kitchen", "nearest_heuristic", "joint_optimizer"];
+export const MAIN_POLICIES: { key: string; label: string; role: "baseline" | "optimized" }[] = [
+  { key: "nearest_heuristic", label: "Baseline Dispatch", role: "baseline" },
+  { key: "joint_optimizer", label: "Optimized Dispatch", role: "optimized" },
+];
+/** @deprecated Use MAIN_POLICIES on the main dashboard */
+export const POLICIES = ALL_POLICIES;
 
 // Experiment types
-export interface ExperimentMetricDiffs {
-  on_time_rate: number;
-  avg_delivery_min: number;
-  avg_late_min: number;
-  avg_order_wait_min: number;
-  avg_rider_wait_kitchen_min: number;
-  avg_rider_idle_min: number;
-  cost_score: number;
-}
-
-export interface ExperimentPolicyMetrics {
-  on_time_rate: number;
-  avg_delivery_min: number;
-  avg_late_min: number;
-  avg_order_wait_min: number;
-  avg_rider_wait_kitchen_min: number;
-  avg_rider_idle_min: number;
-  cost_score: number;
-}
-
-export interface PairedResult {
-  seed: number;
-  scenario: string;
-  days: number;
-  immediate: ExperimentPolicyMetrics;
-  adaptive: ExperimentPolicyMetrics;
-  differences: ExperimentMetricDiffs;
-}
-
 export interface ExperimentSummary {
   num_experiments: number;
   scenario: string;
@@ -192,6 +196,7 @@ export interface DistributionSeries {
   cdf: number[];
   total_orders: number;
   avg_delivery_min: number;
+  percentiles?: { 50: number; 90: number; 95: number; 99: number };
 }
 
 export interface DistributionData {

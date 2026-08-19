@@ -7,15 +7,15 @@ DEFAULT_CONFIG = {
     "seed": 42,
     "days": 1,
     "drain_timeout_min": 240,  # extra sim minutes allowed to finish in-flight orders
-    "kitchens": {"count": 3, "staff_level": 3},
-    "riders": {"count": 10, "speed_kmh": 22.0},
+    "kitchens": {"count": 4, "staff_level": 3, "staff_levels": [3, 3, 2, 2]},
+    "riders": {"count": 15, "speed_kmh": 22.0},
     "demand_multiplier": 1.0,
     "orders": {
         "items_weights": [0.5, 0.3, 0.2],
-        "distance_range_km": [1.0, 3.5],
+        "distance_range_km": [3.0, 17.0],  # Bangalore-calibrated: P10=3.1, P90=17.1
     },
-    "prep": {
-        "workload_factor_per_order": 0.08,
+"prep": {
+        "workload_factor_per_order": 0.027,
         "staff_threshold": 3,
         "staffing_factor": 1.25,
         "clip": [2.0, 25.0],
@@ -38,6 +38,8 @@ DEFAULT_CONFIG = {
     },
     "cancellation_rates": {
         "customer_cancel_per_min": 0.0005,
+        # Reserved for the manual/test rider-cancel path (CancellationManager.rider_cancel).
+        # Not stochastically triggered in normal sim runs — documented honestly.
         "rider_cancel_per_order": 0.02,
         "kitchen_failure_per_min": 0.0002,
     },

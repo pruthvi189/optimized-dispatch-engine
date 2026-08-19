@@ -2,8 +2,6 @@ import json
 import os
 import csv
 
-from .entities import OrderStatus
-
 EVENT_COLUMNS = ["sim_time", "event_type", "order_id", "kitchen_id", "rider_id", "payload_json"]
 
 ORDER_COLUMNS = [

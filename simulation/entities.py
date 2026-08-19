@@ -47,7 +47,7 @@ def complexity_from_items(items: int) -> OrderComplexity:
 @dataclass
 class Order:
     order_id: int
-    kitchen_id: int
+    kitchen_id: int | None
     placed_at: float
     items: int
     complexity: OrderComplexity
@@ -58,6 +58,7 @@ class Order:
     staff_level: int = 0
     weather_severity: str = WeatherSeverity.CLEAR.value
     traffic_severity: str = TrafficSeverity.LOW.value
+    entered_kitchen_at: float | None = None
     prep_started_at: float | None = None
     prep_finished_at: float | None = None
     actual_prep_duration_min: float | None = None
@@ -78,6 +79,11 @@ class Order:
     uncertainty: str | None = None
     risk_buffer_min: float | None = None
     decision_rationale: str | None = None
+    # Spatial model fields (Phase 9 — kitchen selection).
+    customer_x: float | None = None
+    customer_y: float | None = None
+    distance_to_kitchens: list | None = None  # [dist_k1, dist_k2, dist_k3]
+    selected_kitchen_distance: float | None = None  # distance to chosen kitchen
 
 
 @dataclass
@@ -94,7 +100,8 @@ class Rider:
     rider_id: int
     status: RiderStatus = RiderStatus.IDLE
     speed_kmh: float = 22.0
-    location_km: float = 0.0
+    x: float = 0.0
+    y: float = 0.0
     assigned_at: float | None = None
     busy_min: float = 0.0
 

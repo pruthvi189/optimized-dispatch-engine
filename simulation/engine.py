@@ -13,6 +13,8 @@ from .dispatcher import Dispatcher
 from .rng import spawn_streams
 
 DISPATCH_STREAM_SALT = 1_000_000
+RIDER_POSITION_STREAM_SALT = 2_000_000
+RIDER_KITCHEN_MATRIX_STREAM_SALT = 3_000_000
 
 # Step size for the post-generation drain. Small enough that the finish time of
 # the last order is reported to within one step.
@@ -56,19 +58,79 @@ class SimulationEngine:
             raise RuntimeError("adaptive dispatch needs models.predict (Phase 2)") from exc
         return Predictor.load(d.get("predictor_dir", "artifacts"))
 
+    def _generate_rider_positions(self, num_riders: int, kitchen_locations: list[tuple[float, float]]) -> list[tuple[float, float]]:
+        """Generate initial rider positions once per seed.
+
+        Positions are uniformly distributed within the service area.
+        These are passed to RiderPool so both baseline and optimized
+        policies share identical rider layouts for fair comparison.
+        """
+        from .spatial import SERVICE_AREA_HALF
+        pos_rng = np.random.default_rng(self.config["seed"] + RIDER_POSITION_STREAM_SALT)
+        positions = []
+        for _ in range(num_riders):
+            x = float(pos_rng.uniform(-SERVICE_AREA_HALF, SERVICE_AREA_HALF))
+            y = float(pos_rng.uniform(-SERVICE_AREA_HALF, SERVICE_AREA_HALF))
+            positions.append((x, y))
+        return positions
+
+    def _generate_rider_kitchen_matrix(self, num_riders: int, num_kitchens: int) -> np.ndarray:
+        """Generate a per-rider, per-kitchen distance matrix once per seed.
+
+        Returns an (num_riders x num_kitchens) ndarray with values in
+        [hub_distance_range_km[0], hub_distance_range_km[1]].
+
+        This matrix is the SINGLE source of truth for rider→kitchen travel
+        distances. Both policies (for scoring) and delivery_process (for
+        simulation) read from this matrix, ensuring the distance the optimizer
+        evaluates equals the distance the simulator applies.
+
+        Values are intentionally synthetic (no Bangalore GPS data). Documented
+        as synthetic in the paper.
+        """
+        lo, hi = self.config["dispatch"]["hub_distance_range_km"]
+        mat_rng = np.random.default_rng(self.config["seed"] + RIDER_KITCHEN_MATRIX_STREAM_SALT)
+        return mat_rng.uniform(lo, hi, size=(num_riders, num_kitchens))
+
     def _setup(self):
         config = self.config
 
         kitchen_count = config["kitchens"]["count"]
         staff_level = config["kitchens"]["staff_level"]
+        # Support per-kitchen staff levels: staff_levels list overrides staff_level
+        staff_levels = config["kitchens"].get("staff_levels")
+        if staff_levels is None:
+            staff_levels = [staff_level] * kitchen_count
+        elif len(staff_levels) != kitchen_count:
+            raise ValueError(f"staff_levels length {len(staff_levels)} != kitchen_count {kitchen_count}")
         self.kitchens = [
-            Kitchen(kitchen_id=i + 1, staff_level=staff_level)
+            Kitchen(kitchen_id=i + 1, staff_level=staff_levels[i])
             for i in range(kitchen_count)
         ]
         for k in self.kitchens:
             k.resource = simpy.Resource(self.env, capacity=max(1, k.staff_level))
 
-        self.riders = RiderPool(config)
+        # Generate kitchen locations for spatial model.
+        from .spatial import DEFAULT_KITCHEN_LOCATIONS
+        dispatch_cfg_full = config.get("dispatch", {})
+        spatial_cfg = dispatch_cfg_full.get("kitchen_selection", {})
+        kitchen_locations = spatial_cfg.get("kitchen_locations", DEFAULT_KITCHEN_LOCATIONS)
+
+        # Generate rider positions ONCE per seed, so both policies see
+        # identical initial layouts.
+        rider_count = config["riders"]["count"]
+        rider_positions = self._generate_rider_positions(rider_count, kitchen_locations)
+
+        # Generate rider→kitchen distance matrix ONCE per seed.
+        # Both policies and delivery_process use this single matrix,
+        # ensuring the distance the optimizer evaluates equals the distance
+        # the simulator applies (fair comparison requirement).
+        rider_kitchen_matrix = self._generate_rider_kitchen_matrix(
+            rider_count, len(kitchen_locations)
+        )
+
+        self.riders = RiderPool(config, initial_positions=rider_positions,
+                                rider_to_kitchen_matrix=rider_kitchen_matrix)
 
         self._weather = WeatherGenerator(self.env, self.streams["weather"], config)
         self._traffic = TrafficGenerator(self.env, self.streams["traffic"], config)
@@ -82,7 +144,9 @@ class SimulationEngine:
             predictor = self._build_predictor()
             policy = make_policy(dispatch_cfg.get("default_policy", "immediate"), predictor, config)
             self.dispatcher = Dispatcher(
-                self.env, config, policy, self.riders, self.event_log, self.streams["dispatch"]
+                self.env, config, policy, self.riders, self.event_log,
+                self.streams["dispatch"], prep_rng=self.streams["prep"],
+                kitchen_locations=kitchen_locations,
             )
             self.dispatcher.bind_kitchens(self.kitchens)
 
@@ -96,6 +160,16 @@ class SimulationEngine:
             generation_end_min=self.total_minutes,
         )
         self.order_generator.all_orders = self.all_orders
+
+        # Wire up spatial model for kitchen-selection experiments.
+        # Always attach when dispatch is enabled so both baseline and optimized
+        # policies use the same 2D geometry (fair comparison).
+        if dispatch_cfg.get("enabled", False):
+            class _SpatialModel:
+                pass
+            sm = _SpatialModel()
+            sm.kitchen_locations = kitchen_locations
+            self.order_generator.spatial_model = sm
 
     @property
     def hard_stop(self) -> float:

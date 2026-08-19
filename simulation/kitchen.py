@@ -1,5 +1,3 @@
-import simpy
-
 from .entities import Order, OrderStatus, OrderComplexity
 
 # Base prep ranges (minutes) by complexity: (low, high)
@@ -9,6 +7,56 @@ BASE_PREP_RANGES = {
     OrderComplexity.COMPLEX: (8.0, 15.0),
 }
 
+# Midpoints of base prep ranges, used for order-specific prep estimation.
+_BASE_PREP_MIDPOINTS = {
+    OrderComplexity.SIMPLE: 4.5,
+    OrderComplexity.STANDARD: 7.0,
+    OrderComplexity.COMPLEX: 11.5,
+}
+
+
+def estimate_prep_for_order(order: Order) -> dict:
+    """Estimate prep time for a specific order based on its attributes.
+
+    Uses the order's complexity and item count to produce an order-specific
+    prep estimate with a prediction range. This is a transparent calculation
+    using the same base prep ranges the simulator uses — not an ML prediction.
+
+    Returns dict with keys: prep_mean, prep_low, prep_high, uncertainty.
+    """
+    base_mid = _BASE_PREP_MIDPOINTS[order.complexity]
+    lo, hi = BASE_PREP_RANGES[order.complexity]
+
+    # Scale by item count relative to complexity midpoint.
+    # Simple = 1-2 items (midpoint 1.5), Standard = 3-5 (midpoint 4), Complex = 6+ (midpoint 7).
+    item_scale = {
+        OrderComplexity.SIMPLE: 1.0 + 0.05 * (order.items - 1.5),
+        OrderComplexity.STANDARD: 1.0 + 0.03 * (order.items - 4.0),
+        OrderComplexity.COMPLEX: 1.0 + 0.02 * (order.items - 7.0),
+    }
+    scale = item_scale.get(order.complexity, 1.0)
+    prep_mean = base_mid * max(0.7, scale)
+
+    # Prediction range: base range scaled by the same factor.
+    prep_low = lo * max(0.7, scale)
+    prep_high = hi * max(0.7, scale)
+
+    # Uncertainty tier based on range width relative to mean.
+    width = prep_high - prep_low
+    if width < 2.0:
+        tier = "low"
+    elif width < 4.0:
+        tier = "medium"
+    else:
+        tier = "high"
+
+    return {
+        "prep_mean": round(prep_mean, 2),
+        "prep_low": round(prep_low, 2),
+        "prep_high": round(prep_high, 2),
+        "uncertainty": tier,
+    }
+
 
 def sample_prep_time(rng, order: Order, kitchen, weather, traffic, config) -> float:
     """Prep duration conditioned on complexity, workload, staffing, weather."""
@@ -16,7 +64,7 @@ def sample_prep_time(rng, order: Order, kitchen, weather, traffic, config) -> fl
     lo, hi = BASE_PREP_RANGES[order.complexity]
     base = rng.uniform(lo, hi)
 
-    workload_factor = 1.0 + prep.get("workload_factor_per_order", 0.08) * max(0, len(kitchen.current_orders))
+    workload_factor = 1.0 + prep.get("workload_factor_per_order", 0.027) * max(0, len(kitchen.current_orders))
     if kitchen.staff_level < prep.get("staff_threshold", 3):
         workload_factor *= prep.get("staffing_factor", 1.25)
 
@@ -34,10 +82,16 @@ def kitchen_process(env, rng, config, order: Order, kitchens, event_log):
         yield env.timeout(1)
 
     order.status = OrderStatus.PREPPING
-    order.prep_started_at = env.now
+    # Timestamp when the order enters the kitchen queue (before acquiring the
+    # single resource), so queue wait is measurable separately from prep time.
+    order.entered_kitchen_at = env.now
 
     with kitchen.resource.request() as req:
         yield req
+        # Prep only starts once the kitchen capacity is acquired. This keeps
+        # kitchen_queue (= prep_started_at - entered_kitchen_at) honest: it is
+        # pure queue time, not prep time.
+        order.prep_started_at = env.now
         # NOTE: workload/weather/traffic features are snapshotted at PLACEMENT
         # in OrderGenerator._create_order and must NOT be overwritten here
         # (prep-start state is not known at placement time). Only the actual

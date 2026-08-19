@@ -30,6 +30,12 @@ def _decision_row(record):
         "risk_buffer_min": p.get("risk_buffer_min"),
         "travel_to_kitchen_min": p.get("travel_to_kitchen_min"),
         "rationale": p.get("rationale"),
+        "items": p.get("items"),
+        "complexity": p.get("complexity"),
+        "selected_kitchen_id": p.get("selected_kitchen_id"),
+        "selected_rider_id": p.get("selected_rider_id"),
+        "selected_kitchen_distance": p.get("selected_kitchen_distance"),
+        "inputs": p.get("inputs"),
     }
 
 

@@ -111,10 +111,17 @@ def paired_difference_stats(
     c = centered[centered != 0.0]
     m = c.size
     if m:
-        flips = rng.integers(0, 2, size=(n_resamples, m)).astype(bool)
-        signs = np.where(flips, 1.0, -1.0)
-        perm_means = np.mean(signs * c[None, :], axis=1)
-        count = int(np.sum(np.abs(perm_means) >= np.abs(mean)))
+        # Chunked sign-flip permutation: the bootstrap above already consumed
+        # the RNG stream up to here, so drawing the same shape in batches here
+        # reproduces the same draws as a single (n_resamples, m) allocation
+        # while bounding transient memory.
+        count = 0
+        for start in range(0, n_resamples, batch):
+            k = min(batch, n_resamples - start)
+            flips = rng.integers(0, 2, size=(k, m))
+            signs = np.where(flips, 1.0, -1.0)
+            perm_means = np.mean(signs * c[None, :], axis=1)
+            count += int(np.sum(np.abs(perm_means) >= np.abs(mean)))
         p_perm = float((count + 1) / (n_resamples + 1))
     else:
         p_perm = 1.0

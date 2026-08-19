@@ -1,17 +1,13 @@
 """Background-thread simulation runner. Owns the SimPy engine, advances it in
 small increments on a configurable clock, and pushes snapshots to the hub."""
 
-import logging
 import os
-import tempfile
 import threading
 import time
 
 from simulation import SimulationEngine
 
 from .snapshot import build_snapshot
-
-logger = logging.getLogger(__name__)
 
 
 class SimulationRunner:
