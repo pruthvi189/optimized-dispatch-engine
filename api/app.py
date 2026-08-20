@@ -37,7 +37,7 @@ def create_app(initial: RunnerConfigIn | None = None, autostart: bool = False,
         runner.stop()
         await hub.stop()
 
-    app = FastAPI(title="Adaptive Dispatch Engine API", version="0.4.0", lifespan=lifespan)
+    app = FastAPI(title="Optimised Dispatch Engine API", version="0.4.0", lifespan=lifespan)
     app.state.hub = hub
     app.state.runner = runner
     app.state.config = config

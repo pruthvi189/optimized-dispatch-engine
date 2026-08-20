@@ -165,7 +165,7 @@ export function DispatchDecisionVisual({ decisions }: { decisions: Decision[] })
           <div className="dv-arrow">&#8595;</div>
 
           {/* Step 4: Why This Decision? */}
-          {selectedEval && (
+          {selectedEval ? (
             <div className="dv-step">
               <div className="dv-step-label">Why this decision?</div>
               <div className="dv-why-box">
@@ -206,7 +206,53 @@ export function DispatchDecisionVisual({ decisions }: { decisions: Decision[] })
                 </div>
               </div>
             </div>
-          )}
+          ) : latest.rationale ? (
+            <div className="dv-step">
+              <div className="dv-step-label">Why this decision?</div>
+              <div className="dv-why-box">
+                <div className="dv-why-factors">
+                  <div className="dv-why-row dv-why-highlight">
+                    <span className="dv-why-label">Decision rationale</span>
+                    <span className="dv-why-val">{latest.rationale}</span>
+                  </div>
+                  {latest.selected_kitchen_id != null && (
+                    <div className="dv-why-row">
+                      <span className="dv-why-label">Selected kitchen</span>
+                      <span className="dv-why-val">Kitchen {latest.selected_kitchen_id}</span>
+                    </div>
+                  )}
+                  {latest.selected_rider_id != null && (
+                    <div className="dv-why-row">
+                      <span className="dv-why-label">Selected rider</span>
+                      <span className="dv-why-val">Rider {latest.selected_rider_id}</span>
+                    </div>
+                  )}
+                  {latest.selected_kitchen_distance != null && (
+                    <div className="dv-why-row">
+                      <span className="dv-why-label">Kitchen → Customer</span>
+                      <span className="dv-why-val">{formatNumberWithUnit(latest.selected_kitchen_distance, "km")}</span>
+                    </div>
+                  )}
+                  {latest.travel_to_kitchen_min != null && (
+                    <div className="dv-why-row">
+                      <span className="dv-why-label">Rider → Kitchen</span>
+                      <span className="dv-why-val">{formatNumberWithUnit(latest.travel_to_kitchen_min)}</span>
+                    </div>
+                  )}
+                  <div className="dv-why-row">
+                    <span className="dv-why-label">Prep time</span>
+                    <span className="dv-why-val">{prepEst} min</span>
+                  </div>
+                  {latest.risk_buffer_min != null && (
+                    <div className="dv-why-row">
+                      <span className="dv-why-label">Risk buffer</span>
+                      <span className="dv-why-val">{formatNumberWithUnit(latest.risk_buffer_min)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Recent decisions mini-table */}

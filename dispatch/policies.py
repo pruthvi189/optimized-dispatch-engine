@@ -465,6 +465,39 @@ class NearestHeuristicDispatch(DispatchPolicy):
 
         eta = state.now + rider_to_kitchen_min + queue_wait + prep_time + pickup_time + travel_customer
 
+        # Build evaluations for all candidate kitchens.
+        evaluations = []
+        for c in state.kitchen_candidates:
+            c_prep_est = estimate_prep_for_order(order)
+            c_prep = c_prep_est["prep_mean"]
+            c_r2k_min = 0.0
+            c_rider_id = None
+            if state.rider_candidates:
+                c_rider = min(state.rider_candidates, key=lambda r: r.dist_to_kitchens[c.kitchen_id - 1])
+                c_r2k_min = c_rider.dist_to_kitchens[c.kitchen_id - 1] / speed_kmh * 60.0 * tf * wf
+                c_rider_id = c_rider.rider_id
+            c_queue_wait = self._estimate_queue_wait(c)
+            c_base_cust = c.distance_km / speed_kmh * 60.0
+            c_depart = state.now + c_r2k_min + c_queue_wait + c_prep + pickup_time
+            c_cust_sev = forecast_traffic(c_depart, c_base_cust)
+            c_tf_cust = d["traffic_speed_factor"][c_cust_sev.value]
+            c_travel_cust = c_base_cust * c_tf_cust * wf
+            c_total = c_r2k_min + c_queue_wait + c_prep + pickup_time + c_travel_cust
+            ev = {
+                "kitchen_id": c.kitchen_id,
+                "distance_km": round(c.distance_km, 2),
+                "queue_len": c.queue_len,
+                "staff_level": c.staff_level,
+                "delivery_est_min": round(c_total, 2),
+                "rider_to_kitchen_km": round(c_r2k_min / (tf * wf) * speed_kmh / 60.0, 2) if c_rider_id is not None else None,
+                "kitchen_distance_km": round(c.distance_km, 2),
+                "total_est_min": round(c_total, 2),
+            }
+            if c.kitchen_id == best_kitchen.kitchen_id:
+                ev["rider_id"] = best_rider.rider_id if best_rider else None
+                ev["rider_to_kitchen_km"] = round(rider_to_kitchen_dist, 2)
+            evaluations.append(ev)
+
         rationale = (
             f"kitchen {best_kitchen.kitchen_id} (dist={kitchen_distance:.2f}km)"
             + (f", rider {best_rider.rider_id} (rider_to_kitchen={rider_to_kitchen_dist:.2f}km)"
@@ -486,12 +519,7 @@ class NearestHeuristicDispatch(DispatchPolicy):
             selected_rider_id=best_rider.rider_id if best_rider else None,
             items=order.items,
             complexity=order.complexity.value,
-            inputs={
-                "kitchen_id": best_kitchen.kitchen_id,
-                "rider_id": best_rider.rider_id if best_rider else None,
-                "rider_to_kitchen_dist": round(rider_to_kitchen_dist, 2),
-                "kitchen_distance": round(kitchen_distance, 2),
-            },
+            inputs={"evaluations": evaluations},
         )
 
 

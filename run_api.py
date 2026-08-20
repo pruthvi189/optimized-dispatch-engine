@@ -18,7 +18,7 @@ from api.schemas import RunnerConfigIn
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the Adaptive Dispatch Engine API")
+    parser = argparse.ArgumentParser(description="Run the Optimised Dispatch Engine API")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--scenario", default="normal", choices=["normal", "lunch_rush", "rain", "low_staffing", "traffic_spike"])

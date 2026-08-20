@@ -1,4 +1,4 @@
-# Adaptive Dispatch Engine
+# Optimised Dispatch Engine
 
 A simulation prototype for evaluating food-delivery dispatch strategies. It models order arrivals, kitchen operations, rider logistics, and delivery outcomes to compare how different dispatch policies perform under identical conditions.
 
@@ -10,7 +10,7 @@ The central question: **can a dispatch system make better kitchen+rider decision
 
 A food-delivery order requires coordination between the customer, kitchen, and rider. A simple dispatch strategy assigns the nearest kitchen and nearest available rider. An adaptive strategy evaluates multiple kitchen+rider combinations and estimates end-to-end delivery time for each.
 
-The Adaptive Dispatch Engine simulates this operational environment and compares the two approaches side by side. The simulator models:
+The Optimised Dispatch Engine simulates this operational environment and compares the two approaches side by side. The simulator models:
 
 - Order arrivals following a realistic hourly demand curve
 - Kitchen capacity and per-order staffing levels

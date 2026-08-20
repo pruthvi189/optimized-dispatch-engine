@@ -22,7 +22,7 @@ export function Header({ snap, conn }: { snap: Snapshot | null; conn: ConnState 
   return (
     <header className="header">
       <div className="brand">
-        <div className="title">Adaptive Dispatch Engine</div>
+        <div className="title">Optimised Dispatch Engine</div>
         <div className="sub">
           {snap
             ? `${snap.scenario} · seed ${snap.seed} · ${snap.policy}`
